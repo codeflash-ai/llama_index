@@ -91,6 +91,11 @@ class RagDatasetGenerator(PromptMixin):
         self._metadata_mode = metadata_mode
         self._show_progress = show_progress
         self._workers = workers
+        
+        self._prompts_cached = {
+            "text_question_template": self.text_question_template,
+            "text_qa_template": self.text_qa_template,
+        }
 
     @classmethod
     def from_documents(
@@ -247,10 +252,7 @@ class RagDatasetGenerator(PromptMixin):
 
     def _get_prompts(self) -> PromptDictType:
         """Get prompts."""
-        return {
-            "text_question_template": self.text_question_template,
-            "text_qa_template": self.text_qa_template,
-        }
+        return self._prompts_cached
 
     def _get_prompt_modules(self) -> PromptMixinType:
         """Get prompt modules."""
