@@ -150,81 +150,84 @@ class RagDatasetGenerator(PromptMixin):
         labelled: bool = False,
     ) -> LabelledRagDataset:
         """Node question generator."""
-        query_tasks = []
-        examples: List[LabelledRagDataExample] = []
-        summary_indices: List[SummaryIndex] = []
-        for node in nodes:
-            index = SummaryIndex.from_documents(
-                [
-                    Document(
-                        text=node.get_content(metadata_mode=self._metadata_mode),
-                        metadata=node.metadata,
-                        excluded_llm_metadata_keys=node.excluded_llm_metadata_keys,
-                        excluded_embed_metadata_keys=node.excluded_embed_metadata_keys,
-                        relationships=node.relationships,
-                    )
-                ],
-            )
 
-            query_engine = index.as_query_engine(
+        # Pre-create all Documents used for indexing
+        node_docs = [
+            Document(
+                text=node.get_content(metadata_mode=self._metadata_mode),
+                metadata=node.metadata,
+                excluded_llm_metadata_keys=node.excluded_llm_metadata_keys,
+                excluded_embed_metadata_keys=node.excluded_embed_metadata_keys,
+                relationships=node.relationships,
+            )
+            for node in nodes
+        ]
+
+        # Instantiate all SummaryIndices in a single pass, then construct query engines
+        summary_indices = [
+            SummaryIndex.from_documents([doc])
+            for doc in node_docs
+        ]
+
+        # Build question generation query engines
+        query_engines = [
+            index.as_query_engine(
                 llm=self._llm,
                 text_qa_template=self.text_question_template,
                 use_async=True,
-            )
-            task = query_engine.aquery(
-                self.question_gen_query,
-            )
-            query_tasks.append(task)
-            summary_indices.append(index)
+            ) for index in summary_indices
+        ]
 
+        # Prepare async question generation tasks
+        query_tasks = [
+            engine.aquery(self.question_gen_query)
+            for engine in query_engines
+        ]
         responses = await run_jobs(query_tasks, self._show_progress, self._workers)
+
+        examples: List[LabelledRagDataExample] = []
+        model_name = self._llm.metadata.model_name
+        created_by = CreatedBy(type=CreatedByType.AI, model_name=model_name)
+
+        # Zip up all information needed for subsequent steps
         for idx, response in enumerate(responses):
+            # Only call str(response).split("\n") once
             result = str(response).strip().split("\n")
-            cleaned_questions = [
-                re.sub(r"^\d+[\).\s]", "", question).strip() for question in result
-            ]
-            cleaned_questions = [
-                question for question in cleaned_questions if len(question) > 0
-            ]
+            cleaned_questions = self._extract_cleaned_questions(result)
             index = summary_indices[idx]
             reference_context = nodes[idx].text
-            model_name = self._llm.metadata.model_name
-            created_by = CreatedBy(type=CreatedByType.AI, model_name=model_name)
-            if labelled:
-                index = summary_indices[idx]
-                qr_tasks = []
-                for query in cleaned_questions:
-                    # build summary index off of node (i.e. context)
-                    qa_query_engine = index.as_query_engine(
-                        llm=self._llm,
-                        text_qa_template=self.text_qa_template,
-                    )
-                    qr_task = qa_query_engine.aquery(query)
-                    qr_tasks.append(qr_task)
+
+            if labelled and cleaned_questions:
+                # Prepare QA engines for answers once for all questions for this node
+                qa_query_engine = index.as_query_engine(
+                    llm=self._llm,
+                    text_qa_template=self.text_qa_template,
+                )
+                # Prepare all answer tasks together
+                qr_tasks = [qa_query_engine.aquery(query) for query in cleaned_questions]
                 answer_responses: List[RESPONSE_TYPE] = await run_jobs(
                     qr_tasks, self._show_progress, self._workers
                 )
-                for question, answer_response in zip(
-                    cleaned_questions, answer_responses
-                ):
-                    example = LabelledRagDataExample(
+                assert len(answer_responses) == len(cleaned_questions)
+                # Add answers to examples (zip is fine since lengths match)
+                for question, answer_response in zip(cleaned_questions, answer_responses):
+                    examples.append(LabelledRagDataExample(
                         query=question,
                         reference_answer=str(answer_response),
                         reference_contexts=[reference_context],
                         reference_answer_by=created_by,
                         query_by=created_by,
-                    )
-                    examples.append(example)
+                    ))
             else:
-                for query in cleaned_questions:
-                    example = LabelledRagDataExample(
-                        query=query,
+                # Labelled is False, or no questions remain
+                for question in cleaned_questions:
+                    examples.append(LabelledRagDataExample(
+                        query=question,
                         reference_answer="",
                         reference_contexts=[reference_context],
                         reference_answer_by=None,
                         query_by=created_by,
-                    )
-                    examples.append(example)
+                    ))
 
         # split train/test
         return LabelledRagDataset(examples=examples)
@@ -262,3 +265,9 @@ class RagDatasetGenerator(PromptMixin):
             self.text_question_template = prompts["text_question_template"]
         if "text_qa_template" in prompts:
             self.text_qa_template = prompts["text_qa_template"]
+
+    @staticmethod
+    def _extract_cleaned_questions(result: List[str]) -> List[str]:
+        # Compile regex once for efficiency.
+        strip_re = re.compile(r"^\d+[\).\s]")
+        return [q for q in (strip_re.sub("", question).strip() for question in result) if len(q) > 0]
