@@ -56,11 +56,9 @@ def json_schema_to_guidance_output_template(
 ) -> str:
     """Convert a json schema to guidance output template.
 
-    Implementation based on https://github.com/microsoft/guidance/\
-        blob/main/notebooks/applications/jsonformer.ipynb
+    Implementation based on https://github.com/microsoft/guidance/        blob/main/notebooks/applications/jsonformer.ipynb
     Modified to support nested pydantic models.
     """
-    out = ""
     if "type" not in schema and "$ref" in schema:
         if root is None:
             raise ValueError("Must specify root schema for nested object")
@@ -71,51 +69,54 @@ def json_schema_to_guidance_output_template(
             root["definitions"][model], key, indent, root
         )
 
-    if schema["type"] == "object":
-        out += "  " * indent + "{\n"
-        for k, v in schema["properties"].items():
-            out += (
-                "  " * (indent + 1)
-                + f'"{k}"'
-                + ": "
-                + json_schema_to_guidance_output_template(v, k, indent + 1, root)
-                + ",\n"
-            )
-        out += "  " * indent + "}"
-        return out
-    elif schema["type"] == "array":
-        if key is None:
-            raise ValueError("Key should not be None")
-        if "max_items" in schema:
-            extra_args = f" max_iterations={schema['max_items']}"
-        else:
-            extra_args = ""
-        return (
-            "[{{#geneach '"
-            + key
-            + "' stop=']'"
-            + extra_args
-            + "}}{{#unless @first}}, {{/unless}}"
-            + json_schema_to_guidance_output_template(schema["items"], "this", 0, root)
-            + "{{/geneach}}]"
-        )
-    elif schema["type"] == "string":
+    schema_type = schema["type"]
+
+    # Fast path for simple types: string, number/integer, boolean
+    if schema_type == "string":
         if key is None:
             raise ValueError("key should not be None")
-        return "\"{{gen '" + key + "' stop='\"'}}\""
-    elif schema["type"] in ["integer", "number"]:
+        return f"\"{{{{gen '{key}' stop='\"'}}}}\""
+    elif schema_type in ("integer", "number"):
         if key is None:
             raise ValueError("key should not be None")
         if use_pattern_control:
-            return "{{gen '" + key + "' pattern='[0-9\\.]' stop=','}}"
+            return f"{{{{gen '{key}' pattern='[0-9\\.]' stop=','}}}}"
         else:
-            return "\"{{gen '" + key + "' stop='\"'}}\""
-    elif schema["type"] == "boolean":
+            return f"\"{{{{gen '{key}' stop='\"'}}}}\""
+    elif schema_type == "boolean":
         if key is None:
             raise ValueError("key should not be None")
-        return "{{#select '" + key + "'}}True{{or}}False{{/select}}"
+        return f"{{{{#select '{key}'}}}}True{{{{or}}}}False{{{{/select}}}}"
+
+    # Object (most expensive): use list and join for concatenation
+    elif schema_type == "object":
+        lines = ["  " * indent + "{\n"]
+        prop_indent = "  " * (indent + 1)
+        prop_items = schema["properties"].items()
+        # Avoid use of repeated string concatenations in loop
+        for k, v in prop_items:
+            inner = json_schema_to_guidance_output_template(v, k, indent + 1, root)
+            lines.append(
+                f'{prop_indent}"{k}": {inner},\n'
+            )
+        lines.append("  " * indent + "}")
+        return "".join(lines)
+
+    # Array: use f-string and compute only once
+    elif schema_type == "array":
+        if key is None:
+            raise ValueError("Key should not be None")
+        extra_args = f" max_iterations={schema['max_items']}" if "max_items" in schema else ""
+        inner = json_schema_to_guidance_output_template(schema["items"], "this", 0, root)
+        # Use f-string for all pieces together for efficiency
+        return (
+            f"[{{{{#geneach '{key}' stop=']'{extra_args}}}}}"
+            "{{#unless @first}}, {{/unless}}"
+            f"{inner}"
+            "{{/geneach}}]"
+        )
+
     else:
-        schema_type = schema["type"]
         raise ValueError(f"Unknown schema type {schema_type}")
 
 
