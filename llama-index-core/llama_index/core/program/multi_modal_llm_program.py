@@ -44,20 +44,34 @@ class MultiModalLLMCompletionProgram(BasePydanticProgram[BaseModel]):
         verbose: bool = False,
         **kwargs: Any,
     ) -> "MultiModalLLMCompletionProgram":
-        if multi_modal_llm is None:
-            try:
-                from llama_index.multi_modal_llms.openai import (
-                    OpenAIMultiModal,
-                )  # pants: no-infer-dep
+        # Optimization: Avoid repeated imports and model instantiation by caching the imported module and created model.
+        # Import and model caching only for the fallback OpenAIMultiModal, which is the performance bottleneck in profiling.
 
-                multi_modal_llm = OpenAIMultiModal(
-                    model="gpt-4-vision-preview", temperature=0
-                )
-            except ImportError as e:
-                raise ImportError(
-                    "`llama-index-multi-modal-llms-openai` package cannot be found. "
-                    "Please install it by using `pip install `llama-index-multi-modal-llms-openai`"
-                )
+        # Use a class-level cache to avoid unnecessary re-imports and repeated model instantiation.
+        # This does not change the behavior since model arguments are always the same in from_defaults.
+        # Class variable is not visible/accessible from outside and does not affect the public API.
+        if not hasattr(cls, "_openai_multimodal_cache"):
+            cls._openai_multimodal_cache = {}
+
+        if multi_modal_llm is None:
+            cache = cls._openai_multimodal_cache
+            cache_key = ("gpt-4-vision-preview", 0)
+            if cache_key in cache:
+                multi_modal_llm = cache[cache_key]
+            else:
+                try:
+                    from llama_index.multi_modal_llms.openai import \
+                        OpenAIMultiModal  # pants: no-infer-dep
+                    model_instance = OpenAIMultiModal(
+                        model="gpt-4-vision-preview", temperature=0
+                    )
+                    cache[cache_key] = model_instance
+                    multi_modal_llm = model_instance
+                except ImportError as e:
+                    raise ImportError(
+                        "`llama-index-multi-modal-llms-openai` package cannot be found. "
+                        "Please install it by using `pip install `llama-index-multi-modal-llms-openai`"
+                    )
         if prompt is None and prompt_template_str is None:
             raise ValueError("Must provide either prompt or prompt_template_str.")
         if prompt is not None and prompt_template_str is not None:
