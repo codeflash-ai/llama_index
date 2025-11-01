@@ -82,4 +82,6 @@ class PandasInstructionParser(ChainableOutputParser):
 
     def parse(self, output: str) -> Any:
         """Parse, validate, and correct errors programmatically."""
-        return default_output_processor(output, self.df, **self.output_kwargs)
+        df = self.df
+        output_kwargs = self.output_kwargs
+        return default_output_processor(output, df, **output_kwargs)
