@@ -47,9 +47,10 @@ class EmptyIndex(BaseIndex[EmptyIndexStruct]):
 
     def as_retriever(self, **kwargs: Any) -> BaseRetriever:
         # NOTE: lazy import
-        from llama_index.core.indices.empty.retrievers import EmptyIndexRetriever
-
-        return EmptyIndexRetriever(self)
+        if not hasattr(self, "_retriever_cls"):
+            from llama_index.core.indices.empty.retrievers import EmptyIndexRetriever
+            self._retriever_cls = EmptyIndexRetriever
+        return self._retriever_cls(self)
 
     def as_query_engine(
         self, llm: Optional[LLMType] = None, **kwargs: Any
