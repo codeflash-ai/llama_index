@@ -14,19 +14,29 @@ def md_to_df(md_str: str) -> pd.DataFrame:
     # Replace " by "" in md_str
     md_str = md_str.replace('"', '""')
 
-    # Replace markdown pipe tables with commas
-    md_str = md_str.replace("|", '","')
-
     # Remove the second line (table header separator)
     lines = md_str.split("\n")
-    md_str = "\n".join(lines[:1] + lines[2:])
+    if not lines or len(lines) < 3:
+        return None
 
-    # Remove the first and last second char of the line (the pipes, transformed to ",")
-    lines = md_str.split("\n")
-    md_str = "\n".join([line[2:-2] for line in lines])
+    # Remove table header separator (second line)
+    lines = lines[:1] + lines[2:]
+
+    # Remove first and last two chars of each line (pipes transformed to ",")
+    processed_lines = []
+    for line in lines:
+        # Only process non-empty lines with minimum required length to avoid IndexError
+        if len(line) >= 4:
+            processed_lines.append(line[2:-2])
+        elif line.strip():
+            # If line is too short, skip (do not create empty row)
+            continue
+
+    # Recombine the processed lines
+    md_str = "\n".join(processed_lines)
 
     # Check if the table is empty
-    if len(md_str) == 0:
+    if not md_str:
         return None
 
     # Use pandas to read the CSV string into a DataFrame
