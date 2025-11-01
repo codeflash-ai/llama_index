@@ -17,18 +17,16 @@ def convert_to_handlebars(text: str) -> str:
     to a guidance program template.
     """
     # Replace double braces with a temporary placeholder
-    var_left = "TEMP_BRACE_LEFT"
-    var_right = "TEMP_BRACE_RIGHT"
-    text = text.replace("{{", var_left)
-    text = text.replace("}}", var_right)
+    # Use unlikely character sequences for maximum safety and efficiency
+    var_left = "\0BL\0"
+    var_right = "\0BR\0"
 
-    # Replace single braces with double braces
-    text = text.replace("{", "{{")
-    text = text.replace("}", "}}")
-
-    # Replace the temporary placeholder with single braces
-    text = text.replace(var_left, "{")
-    return text.replace(var_right, "}")
+    # Use str.replace for better speed than re.sub; combine replacements for fewer string iterations
+    text = text.replace("{{", var_left).replace("}}", var_right)
+    text = text.replace("{", "{{").replace("}", "}}")
+    # Restore placeholders back to braces
+    text = text.replace(var_left, "{").replace(var_right, "}")
+    return text
 
 
 def wrap_json_markdown(text: str) -> str:
