@@ -2,6 +2,9 @@ import logging
 from typing import Callable, List
 
 from llama_index.core.node_parser.interface import TextSplitter
+import nltk
+
+_tokenizer = nltk.tokenize.PunktSentenceTokenizer()
 
 logger = logging.getLogger(__name__)
 
@@ -33,15 +36,11 @@ def split_by_char() -> Callable[[str], List[str]]:
 
 
 def split_by_sentence_tokenizer() -> Callable[[str], List[str]]:
-    import nltk
-
-    tokenizer = nltk.tokenize.PunktSentenceTokenizer()
-
     # get the spans and then return the sentences
     # using the start index of each span
     # instead of using end, use the start of the next span if available
     def split(text: str) -> List[str]:
-        spans = list(tokenizer.span_tokenize(text))
+        spans = list(_tokenizer.span_tokenize(text))
         sentences = []
         for i, span in enumerate(spans):
             start = span[0]
