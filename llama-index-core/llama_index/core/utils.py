@@ -456,7 +456,10 @@ def print_text(text: str, color: Optional[str] = None, end: str = "") -> None:
     Returns:
         None
     """
-    text_to_print = _get_colored_text(text, color) if color is not None else text
+    if color is not None:
+        text_to_print = _get_colored_text(text, color)
+    else:
+        text_to_print = text
     print(text_to_print, end=end)
 
 

@@ -248,7 +248,10 @@ class LLM(BaseLLM):
         """Predict."""
         self._log_template_data(prompt, **prompt_args)
 
-        if self.metadata.is_chat_model:
+        # Use local variables to reduce attribute lookups for branches
+        metadata = self.metadata
+
+        if metadata.is_chat_model:
             messages = self._get_messages(prompt, **prompt_args)
             chat_response = self.chat(messages)
             output = chat_response.message.content or ""

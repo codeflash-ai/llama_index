@@ -147,23 +147,29 @@ class PandasQueryEngine(BaseQueryEngine):
 
     def _get_table_context(self) -> str:
         """Get table context."""
-        return str(self._df.head(self._head))
+        # Convert head DataFrame to string only once
+        df_head = self._df.head(self._head)
+        return df_head.to_string()
 
     def _query(self, query_bundle: QueryBundle) -> Response:
         """Answer a query."""
         context = self._get_table_context()
+        llm = self._llm
+        instruction_parser = self._instruction_parser
+        verbose = self._verbose
 
-        pandas_response_str = self._llm.predict(
+        pandas_response_str = llm.predict(
             self._pandas_prompt,
             df_str=context,
             query_str=query_bundle.query_str,
             instruction_str=self._instruction_str,
         )
 
-        if self._verbose:
-            print_text(f"> Pandas Instructions:\n" f"```\n{pandas_response_str}\n```\n")
-        pandas_output = self._instruction_parser.parse(pandas_response_str)
-        if self._verbose:
+        if verbose:
+            print_text(f"> Pandas Instructions:\n```\n{pandas_response_str}\n```\n")
+
+        pandas_output = instruction_parser.parse(pandas_response_str)
+        if verbose:
             print_text(f"> Pandas Output: {pandas_output}\n")
 
         response_metadata = {
@@ -172,7 +178,7 @@ class PandasQueryEngine(BaseQueryEngine):
         }
         if self._synthesize_response:
             response_str = str(
-                self._llm.predict(
+                llm.predict(
                     self._response_synthesis_prompt,
                     query_str=query_bundle.query_str,
                     pandas_instructions=pandas_response_str,
