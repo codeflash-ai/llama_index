@@ -298,7 +298,4 @@ def transformations_from_settings_or_context(
     settings: _Settings, context: Optional["ServiceContext"]
 ) -> List[TransformComponent]:
     """Get settings from either settings or context."""
-    if context is not None:
-        return context.transformations
-
-    return settings.transformations
+    return context.transformations if context is not None else settings.transformations
