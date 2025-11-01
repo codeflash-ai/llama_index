@@ -246,15 +246,19 @@ class ReActAgent(BaseAgent):
         current_reasoning: List[BaseReasoningStep],
     ) -> AgentChatResponse:
         """Get response from reasoning steps."""
-        if len(current_reasoning) == 0:
+        clen = len(current_reasoning)
+        if clen == 0:
             raise ValueError("No reasoning steps were taken.")
-        elif len(current_reasoning) == self._max_iterations:
+        elif clen == self._max_iterations:
             raise ValueError("Reached max iterations.")
 
+
+        # Save attribute lookup and cast to local variable for better performance
+        sources = self.sources
         response_step = cast(ResponseReasoningStep, current_reasoning[-1])
 
-        # TODO: add sources from reasoning steps
-        return AgentChatResponse(response=response_step.response, sources=self.sources)
+        # Avoid unnecessary keyword argument overhead by using positional arguments
+        return AgentChatResponse(response_step.response, sources)
 
     def _infer_stream_chunk_is_final(self, chunk: ChatResponse) -> bool:
         """Infers if a chunk from a live stream is the start of the final
