@@ -186,7 +186,8 @@ class BaseToolAsyncAdapter(AsyncBaseTool):
         return self.base_tool(input)
 
     async def acall(self, input: Any) -> ToolOutput:
-        return self.call(input)
+        # Direct call avoids extra method dispatch overhead
+        return self.base_tool(input)
 
 
 def adapt_to_async_tool(tool: BaseTool) -> AsyncBaseTool:
