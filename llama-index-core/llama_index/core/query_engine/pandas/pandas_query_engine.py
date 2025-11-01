@@ -102,15 +102,21 @@ class PandasQueryEngine(BaseQueryEngine):
         self._head = head
         self._pandas_prompt = pandas_prompt or DEFAULT_PANDAS_PROMPT
         self._instruction_str = instruction_str or DEFAULT_INSTRUCTION_STR
-        self._instruction_parser = instruction_parser or PandasInstructionParser(
-            df, output_kwargs or {}
-        )
+
+        # Avoid redundant 'or' and repeated dictionary instantiation.
+        instr_parser = instruction_parser
+        if instr_parser is None:
+            output_kwargs_val = output_kwargs if output_kwargs is not None else {}
+            instr_parser = PandasInstructionParser(df, output_kwargs_val)
+        self._instruction_parser = instr_parser
+
         self._verbose = verbose
 
         self._llm = llm or llm_from_settings_or_context(Settings, service_context)
         self._synthesize_response = synthesize_response
         self._response_synthesis_prompt = (
-            response_synthesis_prompt or DEFAULT_RESPONSE_SYNTHESIS_PROMPT
+            response_synthesis_prompt if response_synthesis_prompt is not None
+            else DEFAULT_RESPONSE_SYNTHESIS_PROMPT
         )
 
         super().__init__(
@@ -119,16 +125,21 @@ class PandasQueryEngine(BaseQueryEngine):
             )
         )
 
+
+        # Pre-assemble the prompts dictionary for faster repeated access
+        self._prompts_dict: Dict[str, Any] = {
+            "pandas_prompt": self._pandas_prompt,
+            "response_synthesis_prompt": self._response_synthesis_prompt,
+        }
+
     def _get_prompt_modules(self) -> PromptMixinType:
         """Get prompt sub-modules."""
         return {}
 
     def _get_prompts(self) -> Dict[str, Any]:
         """Get prompts."""
-        return {
-            "pandas_prompt": self._pandas_prompt,
-            "response_synthesis_prompt": self._response_synthesis_prompt,
-        }
+        # Return cached dict: avoids dict allocation per call
+        return self._prompts_dict
 
     def _update_prompts(self, prompts: PromptDictType) -> None:
         """Update prompts."""
