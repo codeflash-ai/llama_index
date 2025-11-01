@@ -82,12 +82,15 @@ class RelevancyEvaluator(BaseEvaluator):
         else:
             self._refine_template = refine_template or DEFAULT_REFINE_TEMPLATE
 
-    def _get_prompts(self) -> PromptDictType:
-        """Get prompts."""
-        return {
+        # Cache the prompts dict to avoid recreating on every call
+        self._prompts_cache = {
             "eval_template": self._eval_template,
             "refine_template": self._refine_template,
         }
+
+    def _get_prompts(self) -> PromptDictType:
+        """Get prompts."""
+        return self._prompts_cache
 
     def _update_prompts(self, prompts: PromptDictType) -> None:
         """Update prompts."""
