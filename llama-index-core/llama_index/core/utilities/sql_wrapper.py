@@ -60,10 +60,12 @@ class SQLDatabase:
 
         # including view support by adding the views as well as tables to the all
         # tables list if view_support is True
-        self._all_tables = set(
-            self._inspector.get_table_names(schema=schema)
-            + (self._inspector.get_view_names(schema=schema) if view_support else [])
-        )
+        table_names = self._inspector.get_table_names(schema=schema)
+        if view_support:
+            table_names += self._inspector.get_view_names(schema=schema)
+        # avoid repeated list->set conversion
+        self._all_tables = set(table_names)
+
 
         self._include_tables = set(include_tables) if include_tables else set()
         if self._include_tables:
@@ -79,8 +81,17 @@ class SQLDatabase:
                 raise ValueError(
                     f"ignore_tables {missing_tables} not found in database"
                 )
-        usable_tables = self.get_usable_table_names()
+
+        # Avoid unnecessary sorting/allocations: Only run get_usable_table_names once and store lists.
+        # Get usable tables as a sorted list, not set, to reuse in self._usable_tables
+        usable_tables = (
+            sorted(self._include_tables)
+            if self._include_tables
+            else sorted(self._all_tables - self._ignore_tables)
+        )
         self._usable_tables = set(usable_tables) if usable_tables else self._all_tables
+
+        self._usable_tables_sorted = usable_tables  # Store sorted representation to optimize repeated lookups
 
         if not isinstance(sample_rows_in_table_info, int):
             raise TypeError("sample_rows_in_table_info must be an integer")
@@ -139,9 +150,8 @@ class SQLDatabase:
 
     def get_usable_table_names(self) -> Iterable[str]:
         """Get names of tables available."""
-        if self._include_tables:
-            return sorted(self._include_tables)
-        return sorted(self._all_tables - self._ignore_tables)
+        # Reuse precomputed sorted list of usable tables for faster repeated calls
+        return self._usable_tables_sorted
 
     def get_table_columns(self, table_name: str) -> List[Any]:
         """Get table columns."""
