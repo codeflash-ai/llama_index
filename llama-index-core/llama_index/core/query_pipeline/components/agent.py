@@ -197,7 +197,11 @@ class AgentFnComponent(BaseAgentComponent):
 
     def _validate_component_inputs(self, input: Dict[str, Any]) -> Dict[str, Any]:
         """Validate component inputs during run_component."""
-        from llama_index.core.agent.types import Task
+        Task = getattr(self, "_TASK_TYPE", None)
+        if Task is None:
+            from llama_index.core.agent.types import Task as _TaskType
+            self.__class__._TASK_TYPE = _TaskType
+            Task = _TaskType
 
         if "task" not in input:
             raise ValueError("Input must have key 'task'")
