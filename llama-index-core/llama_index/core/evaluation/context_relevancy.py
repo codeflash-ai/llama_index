@@ -113,12 +113,17 @@ class ContextRelevancyEvaluator(BaseEvaluator):
         self.parser_function = parser_function
         self.score_threshold = score_threshold
 
-    def _get_prompts(self) -> PromptDictType:
-        """Get prompts."""
-        return {
+
+        # Cache the prompt dict as an instance attribute for efficient access
+        self._prompt_dict: PromptDictType = {
             "eval_template": self._eval_template,
             "refine_template": self._refine_template,
         }
+
+    def _get_prompts(self) -> PromptDictType:
+        """Get prompts."""
+        # Return the cached prompt dict instead of constructing a new dict every call
+        return self._prompt_dict
 
     def _update_prompts(self, prompts: PromptDictType) -> None:
         """Update prompts."""
