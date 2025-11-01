@@ -55,7 +55,13 @@ SelectorResult = MultiSelection
 
 
 def _wrap_choice(choice: MetadataType) -> ToolMetadata:
-    if isinstance(choice, ToolMetadata):
+    # Fast path: avoid isinstance() checks in single branch if possible
+    ttype = type(choice)
+    if ttype is ToolMetadata:
+        return choice
+    elif ttype is str:
+        return ToolMetadata(description=choice)
+    elif isinstance(choice, ToolMetadata):
         return choice
     elif isinstance(choice, str):
         return ToolMetadata(description=choice)
