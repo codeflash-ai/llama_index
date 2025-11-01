@@ -2,7 +2,6 @@
 
 import logging
 from abc import ABC, abstractmethod
-from collections import ChainMap
 from typing import Any, Dict, List, Optional, Union
 
 from llama_index.core.base.llms.types import (
@@ -159,11 +158,8 @@ class LLMPredictor(BaseLLMPredictor):
     def _log_template_data(
         self, prompt: BasePromptTemplate, **prompt_args: Any
     ) -> None:
-        template_vars = {
-            k: v
-            for k, v in ChainMap(prompt.kwargs, prompt_args).items()
-            if k in prompt.template_vars
-        }
+        all_vars = {**prompt.kwargs, **prompt_args}
+        template_vars = {k: all_vars[k] for k in prompt.template_vars if k in all_vars}
         with self.callback_manager.event(
             CBEventType.TEMPLATING,
             payload={
@@ -270,17 +266,18 @@ class LLMPredictor(BaseLLMPredictor):
         """Async predict."""
         self._log_template_data(prompt, **prompt_args)
 
+        llm = self._llm
         if output_cls is not None:
             output = await self._arun_program(output_cls, prompt, **prompt_args)
-        elif self._llm.metadata.is_chat_model:
-            messages = prompt.format_messages(llm=self._llm, **prompt_args)
+        elif llm.metadata.is_chat_model:
+            messages = prompt.format_messages(llm=llm, **prompt_args)
             messages = self._extend_messages(messages)
-            chat_response = await self._llm.achat(messages)
+            chat_response = await llm.achat(messages)
             output = chat_response.message.content or ""
         else:
-            formatted_prompt = prompt.format(llm=self._llm, **prompt_args)
+            formatted_prompt = prompt.format(llm=llm, **prompt_args)
             formatted_prompt = self._extend_prompt(formatted_prompt)
-            response = await self._llm.acomplete(formatted_prompt)
+            response = await llm.acomplete(formatted_prompt)
             output = response.text
 
         logger.debug(output)
