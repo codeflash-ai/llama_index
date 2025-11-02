@@ -95,6 +95,10 @@ class KnowledgeGraphQueryEngine(BaseQueryEngine):
         self._graph_response_answer_prompt = (
             graph_response_answer_prompt or DEFAULT_KG_RESPONSE_ANSWER_PROMPT
         )
+        self._prompts_cache: Dict[str, Any] = {
+            "graph_query_synthesis_prompt": self._graph_query_synthesis_prompt,
+            "graph_response_answer_prompt": self._graph_response_answer_prompt,
+        }
         self._verbose = verbose
         callback_manager = callback_manager_from_settings_or_context(
             Settings, service_context
@@ -109,10 +113,7 @@ class KnowledgeGraphQueryEngine(BaseQueryEngine):
 
     def _get_prompts(self) -> Dict[str, Any]:
         """Get prompts."""
-        return {
-            "graph_query_synthesis_prompt": self._graph_query_synthesis_prompt,
-            "graph_response_answer_prompt": self._graph_response_answer_prompt,
-        }
+        return self._prompts_cache
 
     def _update_prompts(self, prompts: PromptDictType) -> None:
         """Update prompts."""
