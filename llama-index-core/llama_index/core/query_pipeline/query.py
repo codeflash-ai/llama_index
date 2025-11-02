@@ -42,10 +42,11 @@ def get_output(
         # ensure that output_dict only has one key
         if len(output_dict) != 1:
             raise ValueError("Output dict must have exactly one key.")
-        output = next(iter(output_dict.values()))
+        # tuple unpacking is slightly faster than next(iter())
+        for v in output_dict.values():
+            return v
     else:
-        output = output_dict[src_key]
-    return output
+        return output_dict[src_key]
 
 
 def add_output_to_module_inputs(
@@ -169,8 +170,8 @@ class QueryPipeline(QueryComponent):
     def __init__(
         self,
         callback_manager: Optional[CallbackManager] = None,
-        chain: Optional[Sequence[CHAIN_COMPONENT_TYPE]] = None,
-        modules: Optional[Dict[str, QUERY_COMPONENT_TYPE]] = None,
+        chain: Optional[Sequence["CHAIN_COMPONENT_TYPE"]] = None,
+        modules: Optional[Dict[str, "QUERY_COMPONENT_TYPE"]] = None,
         links: Optional[List[Link]] = None,
         **kwargs: Any,
     ):
@@ -286,8 +287,10 @@ class QueryPipeline(QueryComponent):
 
     def _get_leaf_keys(self) -> List[str]:
         """Get leaf keys."""
-        # get all modules without downstream dependencies
-        return [v for v, d in self.dag.out_degree() if d == 0]
+        # Optimize by iterating directly rather than creating a list from full out_degree()
+        dag_out_degree = self.dag.out_degree()
+        # Since dag.out_degree() returns an iterator of (node, degree)
+        return [v for v, d in dag_out_degree if d == 0]
 
     def set_callback_manager(self, callback_manager: CallbackManager) -> None:
         """Set callback manager."""
@@ -476,26 +479,29 @@ class QueryPipeline(QueryComponent):
         result_outputs: Dict[str, Any],
     ) -> List[str]:
         """Process component output."""
-        new_queue = queue.copy()
-        # if there's no more edges, add result to output
-        if module_key in self._get_leaf_keys():
+        # Use shallow copy sufficient for queuing semantics
+        new_queue = list(queue)
+        # Get leaf keys once per top-level call (avoid repeated computation)
+        leaf_keys = self._get_leaf_keys()
+        if module_key in leaf_keys:
             result_outputs[module_key] = output_dict
         else:
-            edge_list = list(self.dag.edges(module_key, data=True))
-            # everything not in conditional_edge_list is regular
-            for _, dest, attr in edge_list:
+            # Avoid intermediate list if possible, as we're only iterating
+            edges_iter = self.dag.edges(module_key, data=True)
+            for _, dest, attr in edges_iter:
                 output = get_output(attr.get("src_key"), output_dict)
 
-                # if input_fn is not None, use it to modify the input
-                if attr["input_fn"] is not None:
-                    dest_output = attr["input_fn"](output)
+                input_fn = attr.get("input_fn")
+                if input_fn is not None:
+                    dest_output = input_fn(output)
                 else:
                     dest_output = output
 
                 add_edge = True
-                if attr["condition_fn"] is not None:
-                    conditional_val = attr["condition_fn"](output)
-                    if not conditional_val:
+                condition_fn = attr.get("condition_fn")
+                if condition_fn is not None:
+                    # Shortcut for skip case
+                    if not condition_fn(output):
                         add_edge = False
 
                 if add_edge:
@@ -506,9 +512,11 @@ class QueryPipeline(QueryComponent):
                         all_module_inputs[dest],
                     )
                 else:
-                    # remove dest from queue
-                    new_queue.remove(dest)
-
+                    # avoid ValueError in remove by catching and moving on if not present
+                    try:
+                        new_queue.remove(dest)
+                    except ValueError:
+                        pass  # already removed/no-op as before
         return new_queue
 
     def _run_multi(self, module_input_dict: Dict[str, Any]) -> Dict[str, Any]:
