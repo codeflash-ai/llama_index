@@ -121,8 +121,11 @@ class TextSplitter(NodeParser):
         ...
 
     def split_texts(self, texts: List[str]) -> List[str]:
-        nested_texts = [self.split_text(text) for text in texts]
-        return [item for sublist in nested_texts for item in sublist]
+        results = []
+        split_text = self.split_text
+        for text in texts:
+            results.extend(split_text(text))
+        return results
 
     def _parse_nodes(
         self, nodes: Sequence[BaseNode], show_progress: bool = False, **kwargs: Any
