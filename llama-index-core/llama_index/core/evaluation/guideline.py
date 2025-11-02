@@ -104,7 +104,9 @@ class GuidelineEvaluator(BaseEvaluator):
         logger.debug("response: %s", response)
         logger.debug("guidelines: %s", self._guidelines)
 
-        await asyncio.sleep(sleep_time_in_seconds)
+        if sleep_time_in_seconds > 0:
+            await asyncio.sleep(sleep_time_in_seconds)
+
 
         eval_response = await self._llm.apredict(
             self._eval_template,

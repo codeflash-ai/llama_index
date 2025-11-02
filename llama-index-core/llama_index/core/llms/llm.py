@@ -1,52 +1,26 @@
 from collections import ChainMap
-from typing import (
-    Any,
-    Callable,
-    Dict,
-    List,
-    Optional,
-    Protocol,
-    Sequence,
-    get_args,
-    runtime_checkable,
-)
+from typing import (Any, Callable, Dict, List, Optional, Protocol, Sequence,
+                    get_args, runtime_checkable)
 
-from llama_index.core.base.llms.types import (
-    ChatMessage,
-    ChatResponseAsyncGen,
-    ChatResponseGen,
-    CompletionResponseAsyncGen,
-    CompletionResponseGen,
-    MessageRole,
-)
-from llama_index.core.base.query_pipeline.query import (
-    InputKeys,
-    OutputKeys,
-    QueryComponent,
-    StringableInput,
-    validate_and_convert_stringable,
-)
-from llama_index.core.bridge.pydantic import (
-    BaseModel,
-    Field,
-    root_validator,
-    validator,
-)
-from llama_index.core.callbacks import CBEventType, EventPayload
 from llama_index.core.base.llms.base import BaseLLM
-from llama_index.core.base.llms.generic_utils import (
-    messages_to_prompt as generic_messages_to_prompt,
-)
-from llama_index.core.base.llms.generic_utils import (
-    prompt_to_messages,
-)
+from llama_index.core.base.llms.generic_utils import \
+    messages_to_prompt as generic_messages_to_prompt
+from llama_index.core.base.llms.generic_utils import prompt_to_messages
+from llama_index.core.base.llms.types import (ChatMessage,
+                                              ChatResponseAsyncGen,
+                                              ChatResponseGen,
+                                              CompletionResponseAsyncGen,
+                                              CompletionResponseGen,
+                                              MessageRole)
+from llama_index.core.base.query_pipeline.query import (
+    InputKeys, OutputKeys, QueryComponent, StringableInput,
+    validate_and_convert_stringable)
+from llama_index.core.bridge.pydantic import (BaseModel, Field, root_validator,
+                                              validator)
+from llama_index.core.callbacks import CBEventType, EventPayload
 from llama_index.core.prompts import BasePromptTemplate, PromptTemplate
-from llama_index.core.types import (
-    BaseOutputParser,
-    PydanticProgramMode,
-    TokenAsyncGen,
-    TokenGen,
-)
+from llama_index.core.types import (BaseOutputParser, PydanticProgramMode,
+                                    TokenAsyncGen, TokenGen)
 
 
 # NOTE: These two protocols are needed to appease mypy
