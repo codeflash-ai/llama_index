@@ -397,7 +397,7 @@ class TextNode(BaseNode):
 
     def get_content(self, metadata_mode: MetadataMode = MetadataMode.NONE) -> str:
         """Get object content."""
-        metadata_str = self.get_metadata_str(mode=metadata_mode).strip()
+        metadata_str = self.get_metadata_str(mode=metadata_mode)
         if not metadata_str:
             return self.text
 
@@ -410,23 +410,33 @@ class TextNode(BaseNode):
         if mode == MetadataMode.NONE:
             return ""
 
-        usable_metadata_keys = set(self.metadata.keys())
+        metadata = self.metadata
+        # Avoid building a set in-place and then checking membership;
+        # instead, compute excluded keys once per mode and filter in generator
+        # This avoids unnecessary creation of an intermediate set
         if mode == MetadataMode.LLM:
-            for key in self.excluded_llm_metadata_keys:
-                if key in usable_metadata_keys:
-                    usable_metadata_keys.remove(key)
+            excluded_keys = set(self.excluded_llm_metadata_keys)
         elif mode == MetadataMode.EMBED:
-            for key in self.excluded_embed_metadata_keys:
-                if key in usable_metadata_keys:
-                    usable_metadata_keys.remove(key)
+            excluded_keys = set(self.excluded_embed_metadata_keys)
+        else:
+            excluded_keys = None
 
-        return self.metadata_seperator.join(
-            [
-                self.metadata_template.format(key=key, value=str(value))
-                for key, value in self.metadata.items()
-                if key in usable_metadata_keys
-            ]
-        )
+        metadata_template = self.metadata_template
+        # Use generator expression, filter excluded keys directly
+        if excluded_keys is not None:
+            pieces = (
+                metadata_template.format(key=key, value=str(value))
+                for key, value in metadata.items()
+                if key not in excluded_keys
+            )
+        else:
+            pieces = (
+                metadata_template.format(key=key, value=str(value))
+                for key, value in metadata.items()
+            )
+
+        # Use str.join with generator for lower memory usage
+        return self.metadata_seperator.join(pieces)
 
     def set_content(self, value: str) -> None:
         """Set the content of the node."""
