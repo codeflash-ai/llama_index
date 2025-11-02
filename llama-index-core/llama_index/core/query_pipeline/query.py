@@ -169,7 +169,7 @@ class QueryPipeline(QueryComponent):
     def __init__(
         self,
         callback_manager: Optional[CallbackManager] = None,
-        chain: Optional[Sequence[CHAIN_COMPONENT_TYPE]] = None,
+        chain: Optional[Sequence['CHAIN_COMPONENT_TYPE']] = None,
         modules: Optional[Dict[str, QUERY_COMPONENT_TYPE]] = None,
         links: Optional[List[Link]] = None,
         **kwargs: Any,
@@ -416,7 +416,11 @@ class QueryPipeline(QueryComponent):
         if len(result_outputs) != 1:
             raise ValueError("Only one output is supported.")
 
-        result_output = next(iter(result_outputs.values()))
+        # Get the value for the single key directly for speed
+        key = next(iter(result_outputs))
+        result_output = result_outputs[key]
+
+        # Optimize by checking type and length only when needed
         # return_values_direct: if True, return the value directly
         # without the key
         # if it's a dict with one key, return the value
@@ -425,7 +429,9 @@ class QueryPipeline(QueryComponent):
             and len(result_output) == 1
             and return_values_direct
         ):
-            return next(iter(result_output.values()))
+            # Get the value for the single key in result_output
+            subkey = next(iter(result_output))
+            return result_output[subkey]
         else:
             return result_output
 
