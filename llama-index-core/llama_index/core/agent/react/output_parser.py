@@ -12,13 +12,14 @@ from llama_index.core.agent.react.types import (
 from llama_index.core.output_parsers.utils import extract_json_str
 from llama_index.core.types import BaseOutputParser
 
+_EXTRACT_TOOL_USE_PATTERN = re.compile(
+    r"\s*Thought: (.*?)\nAction: ([a-zA-Z0-9_]+).*?\nAction Input: .*?(\{.*\})",
+    re.DOTALL
+)
+
 
 def extract_tool_use(input_text: str) -> Tuple[str, str, str]:
-    pattern = (
-        r"\s*Thought: (.*?)\nAction: ([a-zA-Z0-9_]+).*?\nAction Input: .*?(\{.*\})"
-    )
-
-    match = re.search(pattern, input_text, re.DOTALL)
+    match = _EXTRACT_TOOL_USE_PATTERN.search(input_text)
     if not match:
         raise ValueError(f"Could not extract tool use from input text: {input_text}")
 
