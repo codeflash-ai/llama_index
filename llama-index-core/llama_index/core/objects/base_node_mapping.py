@@ -61,7 +61,7 @@ class BaseObjectNodeMapping(Generic[OT]):
         """To node."""
 
     def to_nodes(self, objs: Sequence[OT]) -> Sequence[TextNode]:
-        return [self.to_node(obj) for obj in objs]
+        return list(map(self.to_node, objs))
 
     def from_node(self, node: BaseNode) -> OT:
         """From node."""
