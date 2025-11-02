@@ -93,7 +93,10 @@ class BaseElementNodeParser(NodeParser):
         callback_manager: Optional[CallbackManager] = None,
         **kwargs: Any,
     ) -> "BaseElementNodeParser":
-        callback_manager = callback_manager or CallbackManager([])
+        if callback_manager is None:
+            if not hasattr(cls, "_empty_callback_manager"):
+                cls._empty_callback_manager = CallbackManager([])
+            callback_manager = cls._empty_callback_manager
 
         return cls(
             callback_manager=callback_manager,
