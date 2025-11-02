@@ -169,7 +169,7 @@ class QueryPipeline(QueryComponent):
     def __init__(
         self,
         callback_manager: Optional[CallbackManager] = None,
-        chain: Optional[Sequence[CHAIN_COMPONENT_TYPE]] = None,
+        chain: Optional[Sequence['CHAIN_COMPONENT_TYPE']] = None,
         modules: Optional[Dict[str, QUERY_COMPONENT_TYPE]] = None,
         links: Optional[List[Link]] = None,
         **kwargs: Any,
@@ -282,7 +282,13 @@ class QueryPipeline(QueryComponent):
 
     def _get_root_keys(self) -> List[str]:
         """Get root keys."""
-        return [v for v, d in self.dag.in_degree() if d == 0]
+
+        # Optimization: Directly get nodes with in-degree 0 using dag.pred,
+        # which avoids materializing the entire in_degree view and checks only those with no predecessors.
+        # This is more efficient for sparse graphs and large DAGs.
+        # The behavioral output (list contents and type) remains unchanged.
+        dag = self.dag
+        return [v for v in dag if not dag.pred[v]]
 
     def _get_leaf_keys(self) -> List[str]:
         """Get leaf keys."""
