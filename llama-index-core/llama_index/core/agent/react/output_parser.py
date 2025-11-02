@@ -12,6 +12,10 @@ from llama_index.core.agent.react.types import (
 from llama_index.core.output_parsers.utils import extract_json_str
 from llama_index.core.types import BaseOutputParser
 
+_quote_pattern = re.compile(r"(?<!\w)\'|\'(?!\w)")
+
+_field_pattern = re.compile(r'"(\w+)":\s*"([^"]*)"')
+
 
 def extract_tool_use(input_text: str) -> Tuple[str, str, str]:
     pattern = (
@@ -29,10 +33,16 @@ def extract_tool_use(input_text: str) -> Tuple[str, str, str]:
 
 
 def action_input_parser(json_str: str) -> dict:
-    processed_string = re.sub(r"(?<!\w)\'|\'(?!\w)", '"', json_str)
-    pattern = r'"(\w+)":\s*"([^"]*)"'
-    matches = re.findall(pattern, processed_string)
-    return dict(matches)
+    if "'" not in json_str:
+        processed_string = json_str
+    else:
+        processed_string = _quote_pattern.sub('"', json_str)
+    
+    result = {}
+    for match in _field_pattern.finditer(processed_string):
+        key, value = match.groups()
+        result[key] = value
+    return result
 
 
 def extract_final_response(input_text: str) -> Tuple[str, str]:
