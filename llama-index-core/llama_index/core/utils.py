@@ -27,6 +27,7 @@ from typing import (
     Union,
     runtime_checkable,
 )
+import llama_index.core
 
 
 class GlobalsHelper:
@@ -97,7 +98,6 @@ class Tokenizer(Protocol):
 
 
 def set_global_tokenizer(tokenizer: Union[Tokenizer, Callable[[str], list]]) -> None:
-    import llama_index.core
 
     if isinstance(tokenizer, Tokenizer):
         llama_index.core.global_tokenizer = tokenizer.encode
@@ -106,7 +106,6 @@ def set_global_tokenizer(tokenizer: Union[Tokenizer, Callable[[str], list]]) -> 
 
 
 def get_tokenizer() -> Callable[[str], List]:
-    import llama_index.core
 
     if llama_index.core.global_tokenizer is None:
         tiktoken_import_err = (
@@ -117,10 +116,11 @@ def get_tokenizer() -> Callable[[str], List]:
         except ImportError:
             raise ImportError(tiktoken_import_err)
 
-        # set tokenizer cache temporarily
-        should_revert = False
+        # Only set the cache dir if it doesn't exist; store original for restoration
+        cache_dir_set = False
         if "TIKTOKEN_CACHE_DIR" not in os.environ:
-            should_revert = True
+            cache_dir_set = True
+            # Use os.path.join+os.path.abspath just once
             os.environ["TIKTOKEN_CACHE_DIR"] = os.path.join(
                 os.path.dirname(os.path.abspath(__file__)),
                 "_static/tiktoken_cache",
@@ -130,7 +130,8 @@ def get_tokenizer() -> Callable[[str], List]:
         tokenizer = partial(enc.encode, allowed_special="all")
         set_global_tokenizer(tokenizer)
 
-        if should_revert:
+        # Restore the env to avoid side-effects
+        if cache_dir_set:
             del os.environ["TIKTOKEN_CACHE_DIR"]
 
     assert llama_index.core.global_tokenizer is not None
