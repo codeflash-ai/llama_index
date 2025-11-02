@@ -573,14 +573,18 @@ class QueryPipeline(QueryComponent):
         for module_key, module_input in module_input_dict.items():
             all_module_inputs[module_key] = module_input
 
+        # Pre-compute module dependencies for efficient ready check
+        module_parents = {k: set(self.dag.predecessors(k)) for k in self.module_dict}
+        completed_modules: set[str] = set()
+
         while len(queue) > 0:
             popped_indices = set()
             popped_nodes = []
             # get subset of nodes who don't have ancestors also in the queue
             # these are tasks that are parallelizable
             for i, module_key in enumerate(queue):
-                module_ancestors = networkx.ancestors(self.dag, module_key)
-                if len(set(module_ancestors).intersection(queue)) == 0:
+                # Use pre-computed parents instead of networkx.ancestors for efficiency
+                if module_parents[module_key].issubset(completed_modules):
                     popped_indices.add(i)
                     popped_nodes.append(module_key)
 
@@ -610,6 +614,9 @@ class QueryPipeline(QueryComponent):
             )
 
             for output_dict, module_key in zip(output_dicts, popped_nodes):
+                # Mark module as completed
+                completed_modules.add(module_key)
+                
                 # get new nodes and is_leaf
                 queue = self._process_component_output(
                     queue, output_dict, module_key, all_module_inputs, result_outputs
