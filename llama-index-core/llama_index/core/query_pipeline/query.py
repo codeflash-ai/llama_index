@@ -282,7 +282,8 @@ class QueryPipeline(QueryComponent):
 
     def _get_root_keys(self) -> List[str]:
         """Get root keys."""
-        return [v for v, d in self.dag.in_degree() if d == 0]
+        pred = self.dag.pred
+        return [v for v in self.dag.nodes if not pred[v]]
 
     def _get_leaf_keys(self) -> List[str]:
         """Get leaf keys."""
