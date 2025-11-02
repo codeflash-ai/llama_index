@@ -432,7 +432,10 @@ def _get_colored_text(text: str, color: str) -> str:
     Returns:
         str: Colored version of the input text.
     """
-    all_colors = {**_LLAMA_INDEX_COLORS, **_ANSI_COLORS}
+    if not hasattr(_get_colored_text, "_all_colors"):
+        _get_colored_text._all_colors = dict(_LLAMA_INDEX_COLORS)
+        _get_colored_text._all_colors.update(_ANSI_COLORS)
+    all_colors = _get_colored_text._all_colors
 
     if color not in all_colors:
         return f"\033[1;3m{text}\033[0m"  # just bolded and italicized
