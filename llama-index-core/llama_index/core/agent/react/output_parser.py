@@ -12,6 +12,8 @@ from llama_index.core.agent.react.types import (
 from llama_index.core.output_parsers.utils import extract_json_str
 from llama_index.core.types import BaseOutputParser
 
+_PATTERN_FINAL_RESPONSE = re.compile(r"\s*Thought:(.*?)Answer:(.*)$", re.DOTALL)
+
 
 def extract_tool_use(input_text: str) -> Tuple[str, str, str]:
     pattern = (
@@ -36,9 +38,7 @@ def action_input_parser(json_str: str) -> dict:
 
 
 def extract_final_response(input_text: str) -> Tuple[str, str]:
-    pattern = r"\s*Thought:(.*?)Answer:(.*?)(?:$)"
-
-    match = re.search(pattern, input_text, re.DOTALL)
+    match = _PATTERN_FINAL_RESPONSE.search(input_text)
     if not match:
         raise ValueError(
             f"Could not extract final answer from input text: {input_text}"
