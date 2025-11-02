@@ -347,10 +347,13 @@ class QueryPipeline(QueryComponent):
         callback_manager = callback_manager or self.callback_manager
         self.set_callback_manager(callback_manager)
         with self.callback_manager.as_trace("query"):
-            try:
-                query_payload = json.dumps(kwargs)
-            except TypeError:
-                query_payload = json.dumps(str(kwargs))
+            if kwargs:
+                try:
+                    query_payload = json.dumps(kwargs)
+                except TypeError:
+                    query_payload = json.dumps(str(kwargs))
+            else:
+                query_payload = "{}"
             with self.callback_manager.event(
                 CBEventType.QUERY, payload={EventPayload.QUERY_STR: query_payload}
             ) as query_event:
