@@ -108,7 +108,10 @@ def get_default_fs() -> fsspec.AbstractFileSystem:
 
 
 def is_default_fs(fs: fsspec.AbstractFileSystem) -> bool:
-    return isinstance(fs, LocalFileSystem) and not fs.auto_mkdir
+    # Avoid attribute lookup if type is not LocalFileSystem
+    if type(fs) is LocalFileSystem:
+        return not fs.auto_mkdir
+    return False
 
 
 logger = logging.getLogger(__name__)
