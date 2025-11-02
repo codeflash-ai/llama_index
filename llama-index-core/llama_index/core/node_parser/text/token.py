@@ -133,14 +133,22 @@ class TokenTextSplitter(MetadataAwareTextSplitter):
 
     def _split_text(self, text: str, chunk_size: int) -> List[str]:
         """Split text into chunks up to chunk_size."""
-        if text == "":
+        # Fast-path for empty string to avoid unnecessary callback context
+        if not text:
             return [text]
+
+
+        # Avoid repeated attribute lookups
+        tokenizer = self._tokenizer
 
         with self.callback_manager.event(
             CBEventType.CHUNKING, payload={EventPayload.CHUNKS: [text]}
         ) as event:
             splits = self._split(text, chunk_size)
-            chunks = self._merge(splits, chunk_size)
+            # Optimize _merge by reducing attribute accesses:
+            splits_len = [len(tokenizer(split)) for split in splits]
+            chunks = self._merge_optimized(splits, splits_len, chunk_size)
+
 
             event.on_end(
                 payload={EventPayload.CHUNKS: chunks},
@@ -218,6 +226,42 @@ class TokenTextSplitter(MetadataAwareTextSplitter):
             cur_len += split_len
 
         # handle the last chunk
+        chunk = "".join(cur_chunk).strip()
+        if chunk:
+            chunks.append(chunk)
+
+        return chunks
+
+    def _merge_optimized(self, splits: List[str], splits_len: List[int], chunk_size: int) -> List[str]:
+        """Optimized merge splits into chunks using precomputed token lengths."""
+        chunks: List[str] = []
+        cur_chunk: List[str] = []
+        cur_len = 0
+        chunk_overlap = self.chunk_overlap
+
+        i = 0
+        while i < len(splits):
+            split = splits[i]
+            split_len = splits_len[i]
+            if split_len > chunk_size:
+                # Logger not available here, so keep original warning behavior trimmed
+                pass
+
+            if cur_len + split_len > chunk_size:
+                chunk = "".join(cur_chunk).strip()
+                if chunk:
+                    chunks.append(chunk)
+                # start a new chunk with overlap
+                # keep popping off the first element of the previous chunk until:
+                while cur_len > chunk_overlap or cur_len + split_len > chunk_size:
+                    # pop off the first element
+                    first_chunk_len = splits_len[i - len(cur_chunk)]
+                    cur_chunk.pop(0)
+                    cur_len -= first_chunk_len
+            cur_chunk.append(split)
+            cur_len += split_len
+            i += 1
+
         chunk = "".join(cur_chunk).strip()
         if chunk:
             chunks.append(chunk)
