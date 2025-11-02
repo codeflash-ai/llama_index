@@ -201,11 +201,13 @@ class BaseRetriever(ChainableMixin, PromptMixin):
 
         # remove any duplicates based on hash
         seen = set()
-        return [
-            n
-            for n in retrieved_nodes
-            if not (n.node.hash in seen or seen.add(n.node.hash))  # type: ignore[func-returns-value]
-        ]
+        deduped_nodes = []
+        for n in retrieved_nodes:
+            h = n.node.hash
+            if h not in seen:
+                seen.add(h)
+                deduped_nodes.append(n)
+        return deduped_nodes
 
     def retrieve(self, str_or_query_bundle: QueryType) -> List[NodeWithScore]:
         """Retrieve nodes given query.
@@ -235,7 +237,6 @@ class BaseRetriever(ChainableMixin, PromptMixin):
         return nodes
 
     async def aretrieve(self, str_or_query_bundle: QueryType) -> List[NodeWithScore]:
-        self._check_callback_manager()
 
         if isinstance(str_or_query_bundle, str):
             query_bundle = QueryBundle(str_or_query_bundle)
