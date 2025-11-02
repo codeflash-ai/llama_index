@@ -120,7 +120,12 @@ class SQLStructStoreQueryEngine(BaseQueryEngine):
         return Response(response=response_str, metadata=metadata)
 
     async def _aquery(self, query_bundle: QueryBundle) -> Response:
-        return self._query(query_bundle)
+        if self._sql_only:
+            metadata = {}
+            response_str = query_bundle.query_str
+        else:
+            response_str, metadata = self._sql_database.run_sql(query_bundle.query_str)
+        return Response(response=response_str, metadata=metadata)
 
 
 class NLStructStoreQueryEngine(BaseQueryEngine):
