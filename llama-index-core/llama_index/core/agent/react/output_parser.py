@@ -12,20 +12,19 @@ from llama_index.core.agent.react.types import (
 from llama_index.core.output_parsers.utils import extract_json_str
 from llama_index.core.types import BaseOutputParser
 
+_PATTERN = re.compile(
+    r"\s*Thought: (.*?)\nAction: ([a-zA-Z0-9_]+).*?\nAction Input: .*?(\{.*\})",
+    re.DOTALL
+)
+
 
 def extract_tool_use(input_text: str) -> Tuple[str, str, str]:
-    pattern = (
-        r"\s*Thought: (.*?)\nAction: ([a-zA-Z0-9_]+).*?\nAction Input: .*?(\{.*\})"
-    )
-
-    match = re.search(pattern, input_text, re.DOTALL)
+    match = _PATTERN.search(input_text)
     if not match:
         raise ValueError(f"Could not extract tool use from input text: {input_text}")
 
-    thought = match.group(1).strip()
-    action = match.group(2).strip()
-    action_input = match.group(3).strip()
-    return thought, action, action_input
+    # Directly return stripped match groups to avoid temporary variable allocation
+    return match.group(1).strip(), match.group(2).strip(), match.group(3).strip()
 
 
 def action_input_parser(json_str: str) -> dict:
