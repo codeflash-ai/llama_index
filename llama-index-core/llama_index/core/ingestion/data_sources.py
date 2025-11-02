@@ -50,6 +50,24 @@ def build_conifurable_data_source_enum():
     But conditional on if the corresponding reader is available.
     """
 
+
+    # Helper function to attempt import and collect enum members efficiently
+    def _try_import_and_append(module_path: str, attr_name: str, enum_name: str, display_name: str):
+        try:
+            # Using __import__ is slightly faster and avoids repeated syntax tree parsing than "from x import y" for many members
+            mod = __import__(module_path, fromlist=(attr_name,))
+            enum_members.append(
+                (
+                    enum_name,
+                    DataSource(
+                        name=display_name,
+                        component_type=getattr(mod, attr_name),
+                    ),
+                )
+            )
+        except ImportError:
+            pass
+
     class ConfigurableComponent(Enum):
         @classmethod
         def from_component(cls, component: BaseComponent) -> "ConfigurableDataSources":
@@ -91,208 +109,68 @@ def build_conifurable_data_source_enum():
 
     enum_members = []
 
-    try:
-        from llama_index.readers.discord import DiscordReader  # pants: no-infer-dep
 
-        enum_members.append(
-            (
-                "DISCORD",
-                DataSource(
-                    name="Discord",
-                    component_type=DiscordReader,
-                ),
-            )
-        )
-    except ImportError:
-        pass
+    # Group all web readers for faster import (reduce repeated imports)
+    _try_import_and_append("llama_index.readers.discord", "DiscordReader", "DISCORD", "Discord")
+    _try_import_and_append("llama_index.readers.elasticsearch", "ElasticsearchReader", "ELASTICSEARCH", "Elasticsearch")
+    _try_import_and_append("llama_index.readers.notion", "NotionPageReader", "NOTION_PAGE", "Notion Page")
+    _try_import_and_append("llama_index.readers.slack", "SlackReader", "SLACK", "Slack")
+    _try_import_and_append("llama_index.readers.twitter", "TwitterTweetReader", "TWITTER", "Twitter")
 
     try:
-        from llama_index.readers.elasticsearch import (
-            ElasticsearchReader,
-        )  # pants: no-infer-dep
-
-        enum_members.append(
-            (
-                "ELASTICSEARCH",
-                DataSource(
-                    name="Elasticsearch",
-                    component_type=ElasticsearchReader,
-                ),
-            )
-        )
+        web_mod = __import__("llama_index.readers.web", fromlist=("SimpleWebPageReader", "TrafilaturaWebReader", "BeautifulSoupWebReader", "RssReader"))
     except ImportError:
-        pass
+        web_mod = None
 
+    if web_mod is not None:
+        # Only perform hasattr checks instead of individual try/except for each reader
+        for reader_attr, enum_name, display_name in [
+            ("SimpleWebPageReader", "SIMPLE_WEB_PAGE", "Simple Web Page"),
+            ("TrafilaturaWebReader", "TRAFILATURA_WEB_PAGE", "Trafilatura Web Page"),
+            ("BeautifulSoupWebReader", "BEAUTIFUL_SOUP_WEB_PAGE", "Beautiful Soup Web Page"),
+            ("RssReader", "RSS", "RSS"),
+        ]:
+            if hasattr(web_mod, reader_attr):
+                enum_members.append(
+                    (
+                        enum_name,
+                        DataSource(
+                            name=display_name,
+                            component_type=getattr(web_mod, reader_attr),
+                        ),
+                    )
+                )
+
+    _try_import_and_append("llama_index.readers.wikipedia", "WikipediaReader", "WIKIPEDIA", "Wikipedia")
+    _try_import_and_append("llama_index.readers.youtube_transcript", "YoutubeTranscriptReader", "YOUTUBE_TRANSCRIPT", "Youtube Transcript")
+
+    # Batch import for Google Readers
     try:
-        from llama_index.readers.notion import NotionPageReader  # pants: no-infer-dep
-
-        enum_members.append(
-            (
-                "NOTION_PAGE",
-                DataSource(
-                    name="Notion Page",
-                    component_type=NotionPageReader,
-                ),
-            )
-        )
+        google_mod = __import__("llama_index.readers.google", fromlist=("GoogleDocsReader", "GoogleSheetsReader"))
     except ImportError:
-        pass
+        google_mod = None
 
-    try:
-        from llama_index.readers.slack import SlackReader  # pants: no-infer-dep
-
-        enum_members.append(
-            (
-                "SLACK",
-                DataSource(
-                    name="Slack",
-                    component_type=SlackReader,
-                ),
+    if google_mod is not None:
+        if hasattr(google_mod, "GoogleDocsReader"):
+            enum_members.append(
+                (
+                    "GOOGLE_DOCS",
+                    DataSource(
+                        name="Google Docs",
+                        component_type=getattr(google_mod, "GoogleDocsReader"),
+                    ),
+                )
             )
-        )
-    except ImportError:
-        pass
-
-    try:
-        from llama_index.readers.twitter import (
-            TwitterTweetReader,
-        )  # pants: no-infer-dep
-
-        enum_members.append(
-            (
-                "TWITTER",
-                DataSource(
-                    name="Twitter",
-                    component_type=TwitterTweetReader,
-                ),
+        if hasattr(google_mod, "GoogleSheetsReader"):
+            enum_members.append(
+                (
+                    "GOOGLE_SHEETS",
+                    DataSource(
+                        name="Google Sheets",
+                        component_type=getattr(google_mod, "GoogleSheetsReader"),
+                    ),
+                )
             )
-        )
-    except ImportError:
-        pass
-
-    try:
-        from llama_index.readers.web import SimpleWebPageReader  # pants: no-infer-dep
-
-        enum_members.append(
-            (
-                "SIMPLE_WEB_PAGE",
-                DataSource(
-                    name="Simple Web Page",
-                    component_type=SimpleWebPageReader,
-                ),
-            )
-        )
-    except ImportError:
-        pass
-
-    try:
-        from llama_index.readers.web import TrafilaturaWebReader  # pants: no-infer-dep
-
-        enum_members.append(
-            (
-                "TRAFILATURA_WEB_PAGE",
-                DataSource(
-                    name="Trafilatura Web Page",
-                    component_type=TrafilaturaWebReader,
-                ),
-            )
-        )
-    except ImportError:
-        pass
-
-    try:
-        from llama_index.readers.web import (
-            BeautifulSoupWebReader,
-        )  # pants: no-infer-dep
-
-        enum_members.append(
-            (
-                "BEAUTIFUL_SOUP_WEB_PAGE",
-                DataSource(
-                    name="Beautiful Soup Web Page",
-                    component_type=BeautifulSoupWebReader,
-                ),
-            )
-        )
-    except ImportError:
-        pass
-
-    try:
-        from llama_index.readers.web import RssReader  # pants: no-infer-dep
-
-        enum_members.append(
-            (
-                "RSS",
-                DataSource(
-                    name="RSS",
-                    component_type=RssReader,
-                ),
-            )
-        )
-    except ImportError:
-        pass
-
-    try:
-        from llama_index.readers.wikipedia import WikipediaReader  # pants: no-infer-dep
-
-        enum_members.append(
-            (
-                "WIKIPEDIA",
-                DataSource(
-                    name="Wikipedia",
-                    component_type=WikipediaReader,
-                ),
-            )
-        )
-    except ImportError:
-        pass
-
-    try:
-        from llama_index.readers.youtube_transcript import (
-            YoutubeTranscriptReader,
-        )  # pants: no-infer-dep
-
-        enum_members.append(
-            (
-                "YOUTUBE_TRANSCRIPT",
-                DataSource(
-                    name="Youtube Transcript",
-                    component_type=YoutubeTranscriptReader,
-                ),
-            )
-        )
-    except ImportError:
-        pass
-
-    try:
-        from llama_index.readers.google import GoogleDocsReader  # pants: no-infer-dep
-
-        enum_members.append(
-            (
-                "GOOGLE_DOCS",
-                DataSource(
-                    name="Google Docs",
-                    component_type=GoogleDocsReader,
-                ),
-            )
-        )
-    except ImportError:
-        pass
-
-    try:
-        from llama_index.readers.google import GoogleSheetsReader  # pants: no-infer-dep
-
-        enum_members.append(
-            (
-                "GOOGLE_SHEETS",
-                DataSource(
-                    name="Google Sheets",
-                    component_type=GoogleSheetsReader,
-                ),
-            )
-        )
-    except ImportError:
-        pass
 
     enum_members.append(
         (
