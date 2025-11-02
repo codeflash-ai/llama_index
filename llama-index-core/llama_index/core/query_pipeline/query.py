@@ -291,10 +291,12 @@ class QueryPipeline(QueryComponent):
 
     def set_callback_manager(self, callback_manager: CallbackManager) -> None:
         """Set callback manager."""
-        # go through every module in module dict and set callback manager
-        self.callback_manager = callback_manager
-        for module in self.module_dict.values():
-            module.set_callback_manager(callback_manager)
+        # Only reset modules' callback managers if the new manager differs
+        if getattr(self, "callback_manager", None) is not callback_manager:
+            self.callback_manager = callback_manager
+            module_values = self.module_dict.values()
+            for module in module_values:
+                module.set_callback_manager(callback_manager)
 
     def run(
         self,
@@ -304,16 +306,18 @@ class QueryPipeline(QueryComponent):
         **kwargs: Any,
     ) -> Any:
         """Run the pipeline."""
-        # first set callback manager
-        callback_manager = callback_manager or self.callback_manager
-        self.set_callback_manager(callback_manager)
-        with self.callback_manager.as_trace("query"):
+        # first set callback manager only if it's different
+        callback_manager_to_use = callback_manager or self.callback_manager
+        if getattr(self, "callback_manager", None) is not callback_manager_to_use:
+            self.set_callback_manager(callback_manager_to_use)
+        with callback_manager_to_use.as_trace("query"):
+            # try to get query payload
             # try to get query payload
             try:
                 query_payload = json.dumps(kwargs)
             except TypeError:
                 query_payload = json.dumps(str(kwargs))
-            with self.callback_manager.event(
+            with callback_manager_to_use.event(
                 CBEventType.QUERY, payload={EventPayload.QUERY_STR: query_payload}
             ) as query_event:
                 return self._run(
