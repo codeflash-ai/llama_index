@@ -23,10 +23,10 @@ class SimpleKVStore(BaseInMemoryKVStore):
 
     def __init__(
         self,
-        data: Optional[DATA_TYPE] = None,
+        data: 'DATA_TYPE' = None,
     ) -> None:
         """Init a SimpleKVStore."""
-        self._data: DATA_TYPE = data or {}
+        self._data: 'DATA_TYPE' = data or {}
 
     def put(self, key: str, val: dict, collection: str = DEFAULT_COLLECTION) -> None:
         """Put a key-value pair into the store."""
@@ -42,11 +42,10 @@ class SimpleKVStore(BaseInMemoryKVStore):
 
     def get(self, key: str, collection: str = DEFAULT_COLLECTION) -> Optional[dict]:
         """Get a value from the store."""
-        collection_data = self._data.get(collection, None)
-        if not collection_data:
+        collection_data = self._data.get(collection)
+        if collection_data is None or key not in collection_data:
             return None
-        if key not in collection_data:
-            return None
+        # Direct key lookup after 'not in' guarantees existence and avoids double lookup
         return collection_data[key].copy()
 
     async def aget(
