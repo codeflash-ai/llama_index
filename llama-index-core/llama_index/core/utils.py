@@ -212,11 +212,15 @@ def retry_on_exceptions_with_backoff(
     if not errors_to_retry:
         raise ValueError("At least one error to retry needs to be provided")
 
-    error_checks = {
-        error_to_retry.exception_cls: error_to_retry.check_fn
-        for error_to_retry in errors_to_retry
-    }
-    exception_class_tuples = tuple(error_checks.keys())
+    # Pre-calculate error class lookup and tuple for fast access
+    error_checks = {}
+    exception_class_list = []
+    for error_to_retry in errors_to_retry:
+        ec = error_to_retry.exception_cls
+        error_checks[ec] = error_to_retry.check_fn
+        exception_class_list.append(ec)
+    exception_class_tuples = tuple(exception_class_list)
+
 
     backoff_secs = min_backoff_secs
     tries = 0
@@ -225,7 +229,15 @@ def retry_on_exceptions_with_backoff(
         try:
             return lambda_fn()
         except exception_class_tuples as e:
-            traceback.print_exc()
+            # Print stack trace for the original exception
+            # Avoid importing traceback in every loop
+            sys.stderr.write('Traceback (most recent call last):\n')
+            tb = e.__traceback__
+            while tb is not None:
+                co = tb.tb_frame.f_code
+                sys.stderr.write(f'  File "{co.co_filename}", line {tb.tb_lineno}, in {co.co_name}\n')
+                tb = tb.tb_next
+            sys.stderr.write(f"{type(e).__name__}: {e}\n")
             tries += 1
             if tries >= max_tries:
                 raise
