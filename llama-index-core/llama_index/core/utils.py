@@ -417,8 +417,14 @@ def get_color_mapping(
     else:
         color_palette = _ANSI_COLORS
 
-    colors = list(color_palette.keys())
-    return {item: colors[i % len(colors)] for i, item in enumerate(items)}
+    colors = tuple(color_palette.keys())
+    
+    if len(items) <= len(colors):
+        return dict(zip(items, colors))
+    else:
+        full_cycles, remainder = divmod(len(items), len(colors))
+        color_order = colors * full_cycles + colors[:remainder]
+        return dict(zip(items, color_order))
 
 
 def _get_colored_text(text: str, color: str) -> str:
