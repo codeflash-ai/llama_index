@@ -44,9 +44,9 @@ class CodeSplitter(TextSplitter):
     def __init__(
         self,
         language: str,
-        chunk_lines: int = DEFAULT_CHUNK_LINES,
-        chunk_lines_overlap: int = DEFAULT_LINES_OVERLAP,
-        max_chars: int = DEFAULT_MAX_CHARS,
+        chunk_lines: int = 40,
+        chunk_lines_overlap: int = 15,
+        max_chars: int = 1500,
         parser: Any = None,
         callback_manager: Optional[CallbackManager] = None,
         include_metadata: bool = True,
@@ -54,7 +54,6 @@ class CodeSplitter(TextSplitter):
         id_func: Optional[Callable[[int, Document], str]] = None,
     ) -> None:
         """Initialize a CodeSplitter."""
-        from tree_sitter import Parser  # pants: no-infer-dep
 
         if parser is None:
             try:
@@ -73,13 +72,18 @@ class CodeSplitter(TextSplitter):
                     "for a list of valid languages."
                 )
                 raise
+        # Only import tree_sitter.Parser when actually needed
+        from tree_sitter import Parser  # pants: no-infer-dep
         if not isinstance(parser, Parser):
             raise ValueError("Parser must be a tree-sitter Parser object.")
 
         self._parser = parser
 
-        callback_manager = callback_manager or CallbackManager([])
-        id_func = id_func or default_id_func
+        # Use the or-expression directly for branchless assignment
+        callback_manager = callback_manager if callback_manager is not None else CallbackManager([])
+        id_func = id_func if id_func is not None else default_id_func
+
+        # Pass defaults directly rather than via potentially global constants to avoid indirect lookups
 
         super().__init__(
             language=language,
@@ -109,6 +113,7 @@ class CodeSplitter(TextSplitter):
             chunk_lines_overlap=chunk_lines_overlap,
             max_chars=max_chars,
             parser=parser,
+            callback_manager=callback_manager,
         )
 
     @classmethod
