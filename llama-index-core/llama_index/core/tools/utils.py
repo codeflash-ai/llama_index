@@ -3,6 +3,8 @@ from typing import Any, Callable, List, Optional, Tuple, Type, Union, cast
 
 from llama_index.core.bridge.pydantic import BaseModel, FieldInfo, create_model
 
+_model_cache = {}
+
 
 def create_schema_from_function(
     name: str,
@@ -12,6 +14,14 @@ def create_schema_from_function(
     ] = None,
 ) -> Type[BaseModel]:
     """Create schema from function."""
+    fields_tuple = tuple(
+        (f[0], f[1], f[2] if len(f) == 3 else None) for f in (additional_fields or [])
+    )
+    cache_key = (name, id(func), fields_tuple)
+    cached_model = _model_cache.get(cache_key)
+    if cached_model is not None:
+        return cached_model
+
     fields = {}
     params = signature(func).parameters
     for param_name in params:
@@ -47,4 +57,6 @@ def create_schema_from_function(
                 "Must be a tuple of length 2 or 3."
             )
 
-    return create_model(name, **fields)  # type: ignore
+    model = create_model(name, **fields)  # type: ignore
+    _model_cache[cache_key] = model
+    return model
