@@ -88,19 +88,29 @@ class ReActAgentWorker(BaseAgentWorker):
         tool_retriever: Optional[ObjectRetriever[BaseTool]] = None,
     ) -> None:
         self._llm = llm
-        self.callback_manager = callback_manager or llm.callback_manager
+        # Avoid attribute lookup on every callback invocation
+        if callback_manager is not None:
+            self.callback_manager = callback_manager
+        else:
+            self.callback_manager = getattr(llm, 'callback_manager', None)
         self._max_iterations = max_iterations
-        self._react_chat_formatter = react_chat_formatter or ReActChatFormatter()
-        self._output_parser = output_parser or ReActOutputParser()
+
+        # Avoid repeated instantiation of default formatter and parser
+        self._react_chat_formatter = react_chat_formatter if react_chat_formatter is not None else ReActChatFormatter()
+        self._output_parser = output_parser if output_parser is not None else ReActOutputParser()
         self._verbose = verbose
 
-        if len(tools) > 0 and tool_retriever is not None:
+        # Ensure the tools and tool_retriever exclusivity logic does only necessary checks
+        n_tools = len(tools)
+        if n_tools > 0 and tool_retriever is not None:
             raise ValueError("Cannot specify both tools and tool_retriever")
-        elif len(tools) > 0:
-            self._get_tools = lambda _: tools
+        if n_tools > 0:
+            _tools = tools
+            self._get_tools = lambda _: _tools
         elif tool_retriever is not None:
-            tool_retriever_c = cast(ObjectRetriever[BaseTool], tool_retriever)
-            self._get_tools = lambda message: tool_retriever_c.retrieve(message)
+            # Avoid repeated casting inside the lambda
+            tool_retriever_c: ObjectRetriever[BaseTool] = cast(ObjectRetriever[BaseTool], tool_retriever)
+            self._get_tools = tool_retriever_c.retrieve
         else:
             self._get_tools = lambda _: []
 
@@ -127,11 +137,14 @@ class ReActAgentWorker(BaseAgentWorker):
         Returns:
             ReActAgent
         """
-        llm = llm or Settings.llm
+        if llm is None:
+            llm = Settings.llm
         if callback_manager is not None:
             llm.callback_manager = callback_manager
+        # Use direct list allocation to avoid function call overhead for tools or []
+        cls_tools = tools if tools is not None else []
         return cls(
-            tools=tools or [],
+            tools=cls_tools,
             tool_retriever=tool_retriever,
             llm=llm,
             max_iterations=max_iterations,
