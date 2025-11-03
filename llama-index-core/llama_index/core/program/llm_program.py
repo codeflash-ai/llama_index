@@ -43,28 +43,39 @@ class LLMTextCompletionProgram(BasePydanticProgram[BaseModel]):
         verbose: bool = False,
         **kwargs: Any,
     ) -> "LLMTextCompletionProgram":
-        llm = llm or Settings.llm
-        if prompt is None and prompt_template_str is None:
-            raise ValueError("Must provide either prompt or prompt_template_str.")
-        if prompt is not None and prompt_template_str is not None:
-            raise ValueError("Must provide either prompt or prompt_template_str.")
-        if prompt_template_str is not None:
-            prompt = PromptTemplate(prompt_template_str)
+        # Fast unconditional branches upfront to reduce branching costs later
+        if prompt is None:
+            if prompt_template_str is None:
+                raise ValueError("Must provide either prompt or prompt_template_str.")
+            prompt_obj = PromptTemplate(prompt_template_str)
+        else:
+            if prompt_template_str is not None:
+                raise ValueError("Must provide either prompt or prompt_template_str.")
+            prompt_obj = prompt
+
+        llm_instance = llm if llm is not None else Settings.llm
+
+        # Decide output_parser/output_cls in fewer conditional branches
 
         # decide default output class if not set
         if output_cls is None:
             if not isinstance(output_parser, PydanticOutputParser):
                 raise ValueError("Output parser must be PydanticOutputParser.")
-            output_cls = output_parser.output_cls
+            output_cls_local = output_parser.output_cls
+            output_parser_local = output_parser
         else:
+            output_cls_local = output_cls
             if output_parser is None:
-                output_parser = PydanticOutputParser(output_cls=output_cls)
+                output_parser_local = PydanticOutputParser(output_cls=output_cls_local)
+            else:
+                output_parser_local = output_parser
+
 
         return cls(
-            output_parser,
-            output_cls,
-            prompt=cast(PromptTemplate, prompt),
-            llm=llm,
+            output_parser_local,
+            output_cls_local,
+            prompt=cast(PromptTemplate, prompt_obj),
+            llm=llm_instance,
             verbose=verbose,
         )
 
