@@ -19,11 +19,13 @@ def _get_image_and_text_nodes(
 ) -> Tuple[List[NodeWithScore], List[NodeWithScore]]:
     image_nodes = []
     text_nodes = []
+    append_image = image_nodes.append
+    append_text = text_nodes.append
     for res_node in nodes:
-        if isinstance(res_node.node, ImageNode):
-            image_nodes.append(res_node)
+        if type(res_node.node) is ImageNode:
+            append_image(res_node)
         else:
-            text_nodes.append(res_node)
+            append_text(res_node)
     return image_nodes, text_nodes
 
 
