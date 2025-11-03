@@ -104,6 +104,11 @@ class ReActAgentWorker(BaseAgentWorker):
         else:
             self._get_tools = lambda _: []
 
+
+        # Cache for the PromptTemplate used in _get_prompts
+        self._system_prompt_template: Optional[PromptDictType] = None
+        self._cached_sys_header_value: Optional[str] = None
+
     @classmethod
     def from_tools(
         cls,
@@ -146,7 +151,15 @@ class ReActAgentWorker(BaseAgentWorker):
         # TODO: the ReAct formatter does not explicitly specify PromptTemplate
         # objects, but wrap it in this to obey the interface
         sys_header = self._react_chat_formatter.system_header
-        return {"system_prompt": PromptTemplate(sys_header)}
+        if (
+            self._system_prompt_template is not None
+            and sys_header == self._cached_sys_header_value
+        ):
+            return self._system_prompt_template
+        prompt_template = {"system_prompt": PromptTemplate(sys_header)}
+        self._system_prompt_template = prompt_template
+        self._cached_sys_header_value = sys_header
+        return prompt_template
 
     def _update_prompts(self, prompts: PromptDictType) -> None:
         """Update prompts."""
