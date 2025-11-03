@@ -179,15 +179,13 @@ class LabelledEvaluatorDataset(BaseLlamaDataset[BaseEvaluator]):
             return EvaluatorExamplePrediction(
                 invalid_prediction=True, invalid_reason=f"Caught error {err!s}"
             )
-
-        if not eval_result.invalid_result:
-            return EvaluatorExamplePrediction(
-                feedback=eval_result.feedback, score=eval_result.score
-            )
-        else:
+        if eval_result.invalid_result:
             return EvaluatorExamplePrediction(
                 invalid_prediction=True, invalid_reason=eval_result.invalid_reason
             )
+        return EvaluatorExamplePrediction(
+            feedback=eval_result.feedback, score=eval_result.score
+        )
 
     def _predict_example(
         self,
