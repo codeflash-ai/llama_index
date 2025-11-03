@@ -42,7 +42,7 @@ class MockLLM(CustomLLM):
         return LLMMetadata(num_output=self.max_tokens or -1)
 
     def _generate_text(self, length: int) -> str:
-        return " ".join(["text" for _ in range(length)])
+        return ("text " * length).rstrip()
 
     @llm_completion_callback()
     def complete(
