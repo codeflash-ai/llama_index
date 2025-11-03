@@ -380,9 +380,7 @@ class LongContextReorder(BaseNodePostprocessor):
         ordered_nodes: List[NodeWithScore] = sorted(
             nodes, key=lambda x: x.score if x.score is not None else 0
         )
-        for i, node in enumerate(ordered_nodes):
-            if i % 2 == 0:
-                reordered_nodes.insert(0, node)
-            else:
-                reordered_nodes.append(node)
+        even_nodes = ordered_nodes[::2][::-1]
+        odd_nodes = ordered_nodes[1::2]
+        reordered_nodes = even_nodes + odd_nodes
         return reordered_nodes
