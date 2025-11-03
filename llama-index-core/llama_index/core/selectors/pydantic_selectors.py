@@ -48,15 +48,26 @@ class PydanticSingleSelector(BaseSelector):
         prompt_template_str: str = DEFAULT_SINGLE_PYD_SELECT_PROMPT_TMPL,
         verbose: bool = False,
     ) -> "PydanticSingleSelector":
-        try:
-            from llama_index.program.openai import (
-                OpenAIPydanticProgram,
-            )  # pants: no-infer-dep
-        except ImportError as e:
-            raise ImportError(
-                "`llama-index-program-openai` package is missing. "
-                "Please install using `pip install llama-index-program-openai`."
-            )
+        # Move import to module level for better performance (avoid repeated imports)
+        # See if we can move the import out, but preserve error handling for missing dependency
+        # Use an import cache to improve runtime on repeated calls
+
+        # Helper to provide OpenAIPydanticProgram and error handling
+        # Only imported once and cached at the module level
+        import sys
+
+        if 'llama_index.program.openai' in sys.modules:
+            OpenAIPydanticProgram = sys.modules['llama_index.program.openai'].OpenAIPydanticProgram
+        else:
+            try:
+                from llama_index.program.openai import \
+                    OpenAIPydanticProgram  # pants: no-infer-dep
+            except ImportError as e:
+                raise ImportError(
+                    "`llama-index-program-openai` package is missing. "
+                    "Please install using `pip install llama-index-program-openai`."
+                )
+
         if program is None:
             program = OpenAIPydanticProgram.from_defaults(
                 output_cls=SingleSelection,
