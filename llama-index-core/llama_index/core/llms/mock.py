@@ -42,7 +42,14 @@ class MockLLM(CustomLLM):
         return LLMMetadata(num_output=self.max_tokens or -1)
 
     def _generate_text(self, length: int) -> str:
-        return " ".join(["text" for _ in range(length)])
+        # Generate the repeated sentence as a single string for better performance
+        # Fast path for common case: avoid join+list
+        if length <= 0:
+            return ""
+        if length == 1:
+            return "text"
+        # The string "text " has length 5 except for the last word
+        return "text" + (" text" * (length - 1))
 
     @llm_completion_callback()
     def complete(
