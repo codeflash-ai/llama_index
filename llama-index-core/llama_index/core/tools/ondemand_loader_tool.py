@@ -117,15 +117,17 @@ class OnDemandLoaderTool(AsyncBaseTool):
         )
 
     def _parse_args(self, *args: Any, **kwargs: Any) -> Tuple[str, List[Document]]:
-        if self._query_str_kwargs_key not in kwargs:
+        # Fast path: extract query string in single lookup
+        try:
+            if self._use_query_str_in_loader:
+                query_str = kwargs[self._query_str_kwargs_key]
+            else:
+                query_str = kwargs.pop(self._query_str_kwargs_key)
+        except KeyError:
             raise ValueError(
                 "Missing query_str in kwargs with parameter name: "
                 f"{self._query_str_kwargs_key}"
             )
-        if self._use_query_str_in_loader:
-            query_str = kwargs[self._query_str_kwargs_key]
-        else:
-            query_str = kwargs.pop(self._query_str_kwargs_key)
 
         docs = self._loader(*args, **kwargs)
 
