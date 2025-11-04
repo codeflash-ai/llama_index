@@ -33,14 +33,16 @@ class TransformQueryEngine(BaseQueryEngine):
         self._query_engine = query_engine
         self._query_transform = query_transform
         self._transform_metadata = transform_metadata
+        # Precompute prompt modules dict for efficiency
+        self._prompt_modules: PromptMixinType = {
+            "query_transform": self._query_transform,
+            "query_engine": self._query_engine,
+        }
         super().__init__(callback_manager)
 
     def _get_prompt_modules(self) -> PromptMixinType:
         """Get prompt sub-modules."""
-        return {
-            "query_transform": self._query_transform,
-            "query_engine": self._query_engine,
-        }
+        return self._prompt_modules
 
     def retrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
         query_bundle = self._query_transform.run(
