@@ -39,28 +39,43 @@ class TokenCounter:
         """
         tokens = 0
 
+        # Use local variable for method lookup for performance
+        get_string_tokens = self.get_string_tokens
+
+        # Reduce attribute lookups and do only necessary shallow copy of additional_kwargs
+        # Pre-bind frequently used variables/methods for faster access
+        role_function = MessageRole.FUNCTION
+
         for message in messages:
-            if message.role:
-                tokens += self.get_string_tokens(message.role)
+            message_role = message.role
+            message_content = message.content
 
-            if message.content:
-                tokens += self.get_string_tokens(message.content)
+            if message_role:
+                tokens += get_string_tokens(message_role)
 
-            additional_kwargs = {**message.additional_kwargs}
+            if message_content:
+                tokens += get_string_tokens(message_content)
+
+            # Only copy if needed to avoid unnecessary object creation
+            additional_kwargs = message.additional_kwargs
 
             if "function_call" in additional_kwargs:
-                function_call = additional_kwargs.pop("function_call")
-                if function_call.get("name", None) is not None:
-                    tokens += self.get_string_tokens(function_call["name"])
+                function_call = additional_kwargs["function_call"]
+                
+                function_call_name = function_call.get("name")
+                if function_call_name is not None:
+                    tokens += get_string_tokens(function_call_name)
 
-                if function_call.get("arguments", None) is not None:
-                    tokens += self.get_string_tokens(function_call["arguments"])
+                function_call_arguments = function_call.get("arguments")
+                if function_call_arguments is not None:
+                    tokens += get_string_tokens(function_call_arguments)
+
 
                 tokens += 3  # Additional tokens for function call
 
             tokens += 3  # Add three per message
 
-            if message.role == MessageRole.FUNCTION:
+            if message_role == role_function:
                 tokens -= 2  # Subtract 2 if role is "function"
 
         return tokens
