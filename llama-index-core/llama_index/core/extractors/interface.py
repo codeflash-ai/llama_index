@@ -118,17 +118,29 @@ class BaseExtractor(TransformComponent):
             new_nodes = [deepcopy(node) for node in nodes]
 
         cur_metadata_list = await self.aextract(new_nodes)
+
+        # Bulk prepare which additional fields (extensions) need adding to nodes
+        has_embed = excluded_embed_metadata_keys is not None and excluded_embed_metadata_keys
+        has_llm = excluded_llm_metadata_keys is not None and excluded_llm_metadata_keys
+        rewrite_template = not self.disable_template_rewrite
+
+        # Use local variable and enumerate just once for all operations for better cache coherence
+        # Avoid repeated attribute lookup with local variable
+        local_TextNode = TextNode
+        local_node_text_template = self.node_text_template
+
         for idx, node in enumerate(new_nodes):
             node.metadata.update(cur_metadata_list[idx])
 
-        for idx, node in enumerate(new_nodes):
-            if excluded_embed_metadata_keys is not None:
+            # Extend only if keys exist (and only once per node)
+            if has_embed:
                 node.excluded_embed_metadata_keys.extend(excluded_embed_metadata_keys)
-            if excluded_llm_metadata_keys is not None:
+            if has_llm:
                 node.excluded_llm_metadata_keys.extend(excluded_llm_metadata_keys)
-            if not self.disable_template_rewrite:
-                if isinstance(node, TextNode):
-                    cast(TextNode, node).text_template = self.node_text_template
+
+            # Avoid redundant isinstance check by using a local constant
+            if rewrite_template and isinstance(node, local_TextNode):
+                cast(TextNode, node).text_template = local_node_text_template
 
         return new_nodes
 
