@@ -36,12 +36,18 @@ class LangchainOutputParser(ChainableOutputParser):
         # instructions (and query is a string template), we need to
         # escape the curly brackets in the format instructions to preserve the
         # overall template.
-        query_tmpl_vars = {
-            v for _, v, _, _ in Formatter().parse(query) if v is not None
-        }
-        if len(query_tmpl_vars) > 0:
-            format_instructions = format_instructions.replace("{", "{{")
-            format_instructions = format_instructions.replace("}", "}}")
+        # Optimization: use a shared Formatter instance and avoid comprehension overhead
+        # by short-circuiting if no '{' in query.
+        if '{' in query:
+            # Use a shared Formatter instance (create once outside loop)
+            parser = Formatter().parse
+            # Avoid unnecessary set creation if there are no actual template variables
+            for _, v, _, _ in parser(query):
+                if v is not None:
+                    # Only escape format_instructions if any template variable is present
+                    format_instructions = format_instructions.replace("{", "{{").replace("}", "}}")
+                    break
+
 
         if self._format_key is not None:
             fmt_query = query.format(**{self._format_key: format_instructions})
