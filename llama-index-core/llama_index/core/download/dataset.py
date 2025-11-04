@@ -38,10 +38,9 @@ PATH_TYPE = Union[str, Path]
 
 def _resolve_dataset_file_name(class_name: str) -> str:
     """Resolve filename based on dataset class."""
-    try:
+    if class_name in DATASET_CLASS_FILENAME_REGISTRY:
         return DATASET_CLASS_FILENAME_REGISTRY[class_name]
-    except KeyError as err:
-        raise ValueError("Invalid dataset filename.") from err
+    raise ValueError("Invalid dataset filename.")
 
 
 def get_dataset_info(
