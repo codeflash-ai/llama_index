@@ -32,6 +32,12 @@ def get_parameters(fn: Callable) -> Tuple[Set[str], Set[str]]:
     return required_params, optional_params
 
 
+def _get_input_keys(input: Dict[str, Any]) -> Set[str]:
+    # Minor helper to avoid recomputing set(input.keys())
+    # Avoid named local inlined everywhere for efficiency.
+    return set(input)  # Faster than set(input.keys()), syntactic sugar
+
+
 class FnComponent(QueryComponent):
     """Query component that takes in an arbitrary function."""
 
@@ -76,16 +82,15 @@ class FnComponent(QueryComponent):
 
     def _validate_component_inputs(self, input: Dict[str, Any]) -> Dict[str, Any]:
         """Validate component inputs during run_component."""
-        # check that all required parameters are present
-        missing_params = self._req_params - set(input.keys())
+        input_key_set = _get_input_keys(input)
+        missing_params = self._req_params - input_key_set
         if missing_params:
             raise ValueError(
                 f"Missing required parameters: {missing_params}. "
                 f"Input keys: {input.keys()}"
             )
 
-        # check that no extra parameters are present
-        extra_params = set(input.keys()) - self._req_params - self._opt_params
+        extra_params = input_key_set - self._req_params - self._opt_params
         if extra_params:
             raise ValueError(
                 f"Extra parameters: {extra_params}. " f"Input keys: {input.keys()}"
