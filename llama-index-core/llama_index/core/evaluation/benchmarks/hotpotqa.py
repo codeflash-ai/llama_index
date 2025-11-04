@@ -16,6 +16,10 @@ from llama_index.core.query_engine.retriever_query_engine import (
 from llama_index.core.schema import NodeWithScore, QueryBundle, TextNode
 from llama_index.core.utils import get_cache_dir
 
+_ARTICLES_RE = re.compile(r"\b(a|an|the)\b", re.UNICODE)
+
+_PUNCT_TRANS_TABLE = str.maketrans('', '', string.punctuation)
+
 DEV_DISTRACTOR_URL = """http://curtis.ml.cmu.edu/datasets/\
 hotpot/hotpot_dev_distractor_v1.json"""
 
@@ -164,20 +168,12 @@ Utils from https://github.com/hotpotqa/hotpot/blob/master/hotpot_evaluate_v1.py
 
 
 def normalize_answer(s: str) -> str:
-    def remove_articles(text: str) -> str:
-        return re.sub(r"\b(a|an|the)\b", " ", text)
-
-    def white_space_fix(text: str) -> str:
-        return " ".join(text.split())
-
-    def remove_punc(text: str) -> str:
-        exclude = set(string.punctuation)
-        return "".join(ch for ch in text if ch not in exclude)
-
-    def lower(text: str) -> str:
-        return text.lower()
-
-    return white_space_fix(remove_articles(remove_punc(lower(s))))
+    # Inlined helpers for efficiency (less call overhead)
+    s = s.lower()
+    s = s.translate(_PUNCT_TRANS_TABLE)
+    s = _ARTICLES_RE.sub(" ", s)
+    s = " ".join(s.split())
+    return s
 
 
 def f1_score(prediction: str, ground_truth: str) -> Tuple[float, float, float]:
