@@ -124,14 +124,13 @@ class DefaultSQLParser(BaseSQLParser):
         """Parse response to SQL."""
         sql_query_start = response.find("SQLQuery:")
         if sql_query_start != -1:
-            response = response[sql_query_start:]
-            # TODO: move to removeprefix after Python 3.9+
-            if response.startswith("SQLQuery:"):
-                response = response[len("SQLQuery:") :]
+            # `len("SQLQuery:")` is 9, so we can combine slicing in one step
+            response = response[sql_query_start + 9 :]
         sql_result_start = response.find("SQLResult:")
         if sql_result_start != -1:
             response = response[:sql_result_start]
-        return response.strip().strip("```").strip()
+        # Combine all strip operations in a single call (chaining isn't required for successive characters)
+        return response.strip(" \n`")
 
 
 class PGVectorSQLParser(BaseSQLParser):
