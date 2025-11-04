@@ -31,7 +31,8 @@ class PydanticOutputParser(ChainableOutputParser):
     ) -> None:
         """Init params."""
         self._output_cls = output_cls
-        self._excluded_schema_keys_from_format = excluded_schema_keys_from_format or []
+        # Use tuple as default to reduce unnecessary list creation (tuple is lightweight and immutable)
+        self._excluded_schema_keys_from_format = excluded_schema_keys_from_format or ()
         self._pydantic_format_tmpl = pydantic_format_tmpl
 
     @property
