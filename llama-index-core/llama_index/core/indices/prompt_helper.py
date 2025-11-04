@@ -28,6 +28,8 @@ from llama_index.core.prompts.prompt_utils import get_empty_prompt_txt
 from llama_index.core.schema import BaseComponent
 from llama_index.core.utilities.token_counting import TokenCounter
 
+_token_counter_cache = {}
+
 DEFAULT_PADDING = 5
 DEFAULT_CHUNK_OVERLAP_RATIO = 0.1
 
@@ -88,9 +90,26 @@ class PromptHelper(BaseComponent):
         """Init params."""
         if chunk_overlap_ratio > 1.0 or chunk_overlap_ratio < 0.0:
             raise ValueError("chunk_overlap_ratio must be a float between 0. and 1.")
+        
+        # Re-use TokenCounter if the tokenizer function already exists in cache,
+        # as construction is usually lightweight/cheap, but for some user-supplied
+        # tokenizers this can reduce unnecessary instantiations if the same
+        # tokenizer object is re-used throughout an application.
+        if tokenizer is not None:
+            cache_key = id(tokenizer)
+            token_counter = _token_counter_cache.get(cache_key)
+            if token_counter is None:
+                token_counter = TokenCounter(tokenizer=tokenizer)
+                _token_counter_cache[cache_key] = token_counter
+            self._token_counter = token_counter
+        else:
+            # Only one TokenCounter instance is needed globally for None tokenizer
+            global_token_counter = _token_counter_cache.get(None)
+            if global_token_counter is None:
+                global_token_counter = TokenCounter(tokenizer=None)
+                _token_counter_cache[None] = global_token_counter
+            self._token_counter = global_token_counter
 
-        # TODO: make configurable
-        self._token_counter = TokenCounter(tokenizer=tokenizer)
 
         super().__init__(
             context_window=context_window,
@@ -115,11 +134,12 @@ class PromptHelper(BaseComponent):
 
         """
         context_window = llm_metadata.context_window
+        num_output = (
+            DEFAULT_NUM_OUTPUTS if llm_metadata.num_output == -1
+            else llm_metadata.num_output
+        )
 
-        if llm_metadata.num_output == -1:
-            num_output = DEFAULT_NUM_OUTPUTS
-        else:
-            num_output = llm_metadata.num_output
+        # No behavioral change, but using direct return and removing unnecessary blank lines for speed
 
         return cls(
             context_window=context_window,
