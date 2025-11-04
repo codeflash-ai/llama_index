@@ -303,13 +303,15 @@ def get_from_param_or_env(
     """Get a value from a param or an environment variable."""
     if param is not None:
         return param
-    elif env_key and env_key in os.environ and os.environ[env_key]:
-        return os.environ[env_key]
-    elif default is not None:
+    elif env_key:
+        value = os.environ.get(env_key)
+        if value:
+            return value
+    if default is not None:
         return default
-    else:
-        raise ValueError(
-            f"Did not find {key}, please add an environment variable"
-            f" `{env_key}` which contains it, or pass"
-            f"  `{key}` as a named parameter."
-        )
+    # keep original error formatting
+    raise ValueError(
+        f"Did not find {key}, please add an environment variable"
+        f" `{env_key}` which contains it, or pass"
+        f"  `{key}` as a named parameter."
+    )
