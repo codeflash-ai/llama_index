@@ -94,14 +94,21 @@ class FnComponent(QueryComponent):
 
     def _run_component(self, **kwargs: Any) -> Dict:
         """Run component."""
-        return {self.output_key: self.fn(**kwargs)}
+        fn = self.fn
+        output_key = self.output_key
+        # local variable access is faster than attribute lookup in tight loops
+        return {output_key: fn(**kwargs)}
 
     async def _arun_component(self, **kwargs: Any) -> Any:
         """Run component (async)."""
-        if self.async_fn is None:
-            return self._run_component(**kwargs)
+        async_fn = self.async_fn
+        output_key = self.output_key
+        fn = self.fn
+        if async_fn is None:
+            return {output_key: fn(**kwargs)}
         else:
-            return {self.output_key: await self.async_fn(**kwargs)}
+            # localize output_key to avoid repeated attribute lookup
+            return {output_key: await async_fn(**kwargs)}
 
     @property
     def input_keys(self) -> InputKeys:
