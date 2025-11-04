@@ -16,6 +16,12 @@ from llama_index.core.query_engine.retriever_query_engine import (
 from llama_index.core.schema import NodeWithScore, QueryBundle, TextNode
 from llama_index.core.utils import get_cache_dir
 
+_ARTICLES_RE = re.compile(r"\b(a|an|the)\b")
+
+_PUNCTUATION_TABLE = str.maketrans('', '', string.punctuation)
+
+_YESNO_SET = {"yes", "no", "noanswer"}
+
 DEV_DISTRACTOR_URL = """http://curtis.ml.cmu.edu/datasets/\
 hotpot/hotpot_dev_distractor_v1.json"""
 
@@ -164,20 +170,12 @@ Utils from https://github.com/hotpotqa/hotpot/blob/master/hotpot_evaluate_v1.py
 
 
 def normalize_answer(s: str) -> str:
-    def remove_articles(text: str) -> str:
-        return re.sub(r"\b(a|an|the)\b", " ", text)
-
-    def white_space_fix(text: str) -> str:
-        return " ".join(text.split())
-
-    def remove_punc(text: str) -> str:
-        exclude = set(string.punctuation)
-        return "".join(ch for ch in text if ch not in exclude)
-
-    def lower(text: str) -> str:
-        return text.lower()
-
-    return white_space_fix(remove_articles(remove_punc(lower(s))))
+    # The helper functions are moved outside for reuse and performance
+    s = s.lower()
+    s = s.translate(_PUNCTUATION_TABLE)
+    s = _ARTICLES_RE.sub(" ", s)
+    s = " ".join(s.split())
+    return s
 
 
 def f1_score(prediction: str, ground_truth: str) -> Tuple[float, float, float]:
@@ -187,20 +185,39 @@ def f1_score(prediction: str, ground_truth: str) -> Tuple[float, float, float]:
     ZERO_METRIC = (0, 0, 0)
 
     if (
-        normalized_prediction in ["yes", "no", "noanswer"]
+        normalized_prediction in _YESNO_SET
         and normalized_prediction != normalized_ground_truth
     ):
         return ZERO_METRIC
     if (
-        normalized_ground_truth in ["yes", "no", "noanswer"]
+        normalized_ground_truth in _YESNO_SET
         and normalized_prediction != normalized_ground_truth
     ):
         return ZERO_METRIC
 
     prediction_tokens = normalized_prediction.split()
     ground_truth_tokens = normalized_ground_truth.split()
-    common = Counter(prediction_tokens) & Counter(ground_truth_tokens)
-    num_same = sum(common.values())
+    if not prediction_tokens or not ground_truth_tokens:
+        return ZERO_METRIC
+
+    # For short tokens, intersect manually for better perf
+    if len(prediction_tokens) <= 5 and len(ground_truth_tokens) <= 5:
+        # Use multisets: count in dicts
+        pred_counts = {}
+        for token in prediction_tokens:
+            pred_counts[token] = pred_counts.get(token, 0) + 1
+        gt_counts = {}
+        for token in ground_truth_tokens:
+            gt_counts[token] = gt_counts.get(token, 0) + 1
+        num_same = 0
+        for token in pred_counts:
+            if token in gt_counts:
+                num_same += min(pred_counts[token], gt_counts[token])
+    else:
+        # Original: Counter intersection
+        common = Counter(prediction_tokens) & Counter(ground_truth_tokens)
+        num_same = sum(common.values())
+
     if num_same == 0:
         return ZERO_METRIC
     precision = 1.0 * num_same / len(prediction_tokens)
