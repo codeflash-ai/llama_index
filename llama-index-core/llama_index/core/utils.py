@@ -418,7 +418,8 @@ def get_color_mapping(
         color_palette = _ANSI_COLORS
 
     colors = list(color_palette.keys())
-    return {item: colors[i % len(colors)] for i, item in enumerate(items)}
+    num_colors = len(colors)
+    return {item: colors[i % num_colors] for i, item in enumerate(items)}
 
 
 def _get_colored_text(text: str, color: str) -> str:
