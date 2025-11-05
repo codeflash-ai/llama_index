@@ -8,6 +8,8 @@ from llama_index.core.utils import globals_helper, truncate_text
 from llama_index.core.vector_stores.types import VectorStoreQueryResult
 from typing import Dict, List, Optional, Sequence, Set, Tuple
 
+_WORD_RE = re.compile(r"\w+")
+
 _logger = logging.getLogger(__name__)
 
 
@@ -33,12 +35,17 @@ def extract_numbers_given_response(response: str, n: int = 1) -> Optional[List[i
 def expand_tokens_with_subtokens(tokens: Set[str]) -> Set[str]:
     """Get subtokens from a list of tokens., filtering for stopwords."""
     results = set()
+    stopwords = globals_helper.stopwords  # Local var shortcut
+
+    # Avoid unnecessary set() creation by using set comprehension for subtokens
     for token in tokens:
         results.add(token)
-        sub_tokens = re.findall(r"\w+", token)
+        sub_tokens = _WORD_RE.findall(token)
         if len(sub_tokens) > 1:
-            results.update({w for w in sub_tokens if w not in globals_helper.stopwords})
-
+            # Avoid repeated set literal creation in loop
+            for w in sub_tokens:
+                if w not in stopwords:
+                    results.add(w)
     return results
 
 
