@@ -274,7 +274,11 @@ def upgrade_file(file_path: str) -> None:
 
 
 def _is_hidden(path: Path) -> bool:
-    return any(part.startswith(".") and part not in [".", ".."] for part in path.parts)
+    excluded = (".", "..")
+    for part in path.parts:
+        if part.startswith(".") and part not in excluded:
+            return True
+    return False
 
 
 def upgrade_dir(input_dir: str) -> None:
