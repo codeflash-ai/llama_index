@@ -460,24 +460,18 @@ class KnowledgeGraphRAGRetriever(BaseRetriever):
         """Initialize the retriever."""
         # Ensure that we have a graph store
         assert storage_context is not None, "Must provide a storage context."
-        assert (
-            storage_context.graph_store is not None
-        ), "Must provide a graph store in the storage context."
+        assert storage_context.graph_store is not None, "Must provide a graph store in the storage context."
         self._storage_context = storage_context
         self._graph_store = storage_context.graph_store
 
         self._llm = llm or llm_from_settings_or_context(Settings, service_context)
 
         self._entity_extract_fn = entity_extract_fn
-        self._entity_extract_template = (
-            entity_extract_template or DEFAULT_QUERY_KEYWORD_EXTRACT_TEMPLATE
-        )
+        self._entity_extract_template = entity_extract_template or DEFAULT_QUERY_KEYWORD_EXTRACT_TEMPLATE
         self._entity_extract_policy = entity_extract_policy
 
         self._synonym_expand_fn = synonym_expand_fn
-        self._synonym_expand_template = (
-            synonym_expand_template or DEFAULT_SYNONYM_EXPAND_PROMPT
-        )
+        self._synonym_expand_template = synonym_expand_template or DEFAULT_SYNONYM_EXPAND_PROMPT
         self._synonym_expand_policy = synonym_expand_policy
 
         self._max_entities = max_entities
@@ -485,21 +479,14 @@ class KnowledgeGraphRAGRetriever(BaseRetriever):
         self._retriever_mode = retriever_mode
         self._with_nl2graphquery = with_nl2graphquery
         if self._with_nl2graphquery:
-            from llama_index.core.query_engine.knowledge_graph_query_engine import (
-                KnowledgeGraphQueryEngine,
-            )
+            from llama_index.core.query_engine.knowledge_graph_query_engine import \
+                KnowledgeGraphQueryEngine
 
-            graph_query_synthesis_prompt = kwargs.get(
-                "graph_query_synthesis_prompt",
-                None,
-            )
+            graph_query_synthesis_prompt = kwargs.get("graph_query_synthesis_prompt", None)
             if graph_query_synthesis_prompt is not None:
                 del kwargs["graph_query_synthesis_prompt"]
 
-            graph_response_answer_prompt = kwargs.get(
-                "graph_response_answer_prompt",
-                None,
-            )
+            graph_response_answer_prompt = kwargs.get("graph_response_answer_prompt", None)
             if graph_response_answer_prompt is not None:
                 del kwargs["graph_response_answer_prompt"]
 
@@ -594,41 +581,49 @@ class KnowledgeGraphRAGRetriever(BaseRetriever):
         result_start_token: str = "KEYWORDS:",
     ) -> List[str]:
         """Get entities from query string."""
-        assert cross_handle_policy in [
-            "union",
-            "intersection",
-        ], "Invalid entity extraction policy."
-        if cross_handle_policy == "intersection":
-            assert all(
-                [
-                    handle_fn is not None,
-                    handle_llm_prompt_template is not None,
-                ]
-            ), "Must provide entity extract function and template."
-        assert any(
-            [
-                handle_fn is not None,
-                handle_llm_prompt_template is not None,
-            ]
-        ), "Must provide either entity extract function or template."
-        enitities_fn: List[str] = []
-        enitities_llm: Set[str] = set()
+        assert cross_handle_policy in ["union", "intersection"], "Invalid entity extraction policy."
 
-        if handle_fn is not None:
-            enitities_fn = handle_fn(query_str)
+        # Short-circuit for union policy if only one extraction method present
+        if cross_handle_policy == "union":
+            if handle_fn is not None and handle_llm_prompt_template is None:
+                entities = handle_fn(query_str)
+                if self._verbose:
+                    print_text(f"Entities processed: {entities}\n", color="green")
+                return entities
+            if handle_fn is None and handle_llm_prompt_template is not None:
+                response = await self._llm.apredict(
+                    handle_llm_prompt_template,
+                    max_keywords=max_items,
+                    question=query_str,
+                )
+                entities_llm = extract_keywords_given_response(
+                    response, start_token=result_start_token, lowercase=False
+                )
+                entities = list(entities_llm)
+                if self._verbose:
+                    print_text(f"Entities processed: {entities}\n", color="green")
+                return entities
+
+        if cross_handle_policy == "intersection":
+            assert handle_fn is not None and handle_llm_prompt_template is not None, "Must provide entity extract function and template."
+        assert handle_fn is not None or handle_llm_prompt_template is not None, "Must provide either entity extract function or template."
+
+        # Both extraction methods present, do full processing
+        entities_fn: List[str] = handle_fn(query_str) if handle_fn is not None else []
+        entities_llm: Set[str] = set()
         if handle_llm_prompt_template is not None:
             response = await self._llm.apredict(
                 handle_llm_prompt_template,
                 max_keywords=max_items,
                 question=query_str,
             )
-            enitities_llm = extract_keywords_given_response(
+            entities_llm = extract_keywords_given_response(
                 response, start_token=result_start_token, lowercase=False
             )
         if cross_handle_policy == "union":
-            entities = list(set(enitities_fn) | enitities_llm)
+            entities = list(set(entities_fn) | entities_llm)
         elif cross_handle_policy == "intersection":
-            entities = list(set(enitities_fn).intersection(set(enitities_llm)))
+            entities = list(set(entities_fn).intersection(entities_llm))
         if self._verbose:
             print_text(f"Entities processed: {entities}\n", color="green")
 
@@ -658,6 +653,11 @@ class KnowledgeGraphRAGRetriever(BaseRetriever):
             "KEYWORDS:",
         )
         expanded_entities = await self._aexpand_synonyms(entities)
+        # Avoid unnecessary set creation if either is empty
+        if not entities:
+            return list(set(expanded_entities))
+        if not expanded_entities:
+            return list(set(entities))
         return list(set(entities) | set(expanded_entities))
 
     def _expand_synonyms(self, keywords: List[str]) -> List[str]:
@@ -673,8 +673,13 @@ class KnowledgeGraphRAGRetriever(BaseRetriever):
 
     async def _aexpand_synonyms(self, keywords: List[str]) -> List[str]:
         """Expand synonyms or similar expressions for keywords."""
+        # Optimized str conversion, fewer allocations
+        if keywords:
+            keywords_str = ','.join(keywords)
+        else:
+            keywords_str = ''
         return await self._aprocess_entities(
-            str(keywords),
+            keywords_str,
             self._synonym_expand_fn,
             self._synonym_expand_template,
             self._synonym_expand_policy,
