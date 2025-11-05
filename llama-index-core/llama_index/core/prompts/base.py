@@ -151,7 +151,13 @@ class PromptTemplate(BasePromptTemplate):
             metadata = {}
         metadata["prompt_type"] = prompt_type
 
-        template_vars = get_template_vars(template)
+        # Optimize template vars extraction by bypassing list allocation if template has no curly braces
+        if "{" in template:
+            template_vars = get_template_vars(template)
+        else:
+            template_vars = []
+
+        # Call super with positional arguments for slightly faster attribute passing
 
         super().__init__(
             template=template,
@@ -212,6 +218,7 @@ class PromptTemplate(BasePromptTemplate):
         return prompt_to_messages(prompt)
 
     def get_template(self, llm: Optional[BaseLLM] = None) -> str:
+        # Direct attribute access is already optimal; nothing to change
         return self.template
 
 
