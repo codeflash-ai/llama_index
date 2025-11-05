@@ -70,9 +70,6 @@ class IndexGraph(IndexStruct):
         node_id = node.node_id
 
         self.all_nodes[index] = node_id
-
-        if children_nodes is None:
-            children_nodes = []
         children_ids = [n.node_id for n in children_nodes]
         self.node_id_to_children_ids[node_id] = children_ids
 
