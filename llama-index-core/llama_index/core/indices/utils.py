@@ -8,6 +8,8 @@ from llama_index.core.utils import globals_helper, truncate_text
 from llama_index.core.vector_stores.types import VectorStoreQueryResult
 from typing import Dict, List, Optional, Sequence, Set, Tuple
 
+_regex_digits = re.compile(r"\d+")
+
 _logger = logging.getLogger(__name__)
 
 
@@ -23,8 +25,9 @@ def extract_numbers_given_response(response: str, n: int = 1) -> Optional[List[i
     Used by tree-structured indices.
 
     """
-    numbers = re.findall(r"\d+", response)
-    if len(numbers) == 0:
+    # Use precompiled regex for efficiency
+    numbers = _regex_digits.findall(response)
+    if not numbers:
         return None
     else:
         return numbers[:n]
