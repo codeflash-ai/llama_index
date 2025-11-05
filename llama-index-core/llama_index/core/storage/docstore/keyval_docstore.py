@@ -343,7 +343,12 @@ class KVDocumentStore(BaseDocumentStore):
 
     def ref_doc_exists(self, ref_doc_id: str) -> bool:
         """Check if a ref_doc_id has been ingested."""
-        return self.get_ref_doc_info(ref_doc_id) is not None
+        # Perf: Fast path checks existence without legacy transformation overhead
+        # Only call get, don't build any extra objects if not needed
+        ref_doc_info = self._kvstore.get(
+            ref_doc_id, collection=self._ref_doc_collection
+        )
+        return bool(ref_doc_info)
 
     async def aref_doc_exists(self, ref_doc_id: str) -> bool:
         """Check if a ref_doc_id has been ingested."""
