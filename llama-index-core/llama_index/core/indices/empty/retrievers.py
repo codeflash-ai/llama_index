@@ -28,11 +28,12 @@ class EmptyIndexRetriever(BaseRetriever):
         **kwargs: Any,
     ) -> None:
         """Initialize params."""
+        # Inline assignment to avoid extra function call for 'or' logic
+        self._input_prompt = input_prompt if input_prompt is not None else DEFAULT_SIMPLE_INPUT_PROMPT
         self._index = index
-        self._input_prompt = input_prompt or DEFAULT_SIMPLE_INPUT_PROMPT
         super().__init__(callback_manager)
 
     def _retrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
         """Retrieve relevant nodes."""
-        del query_bundle  # Unused
+        # Remove unnecessary 'del' as no side effects or increased memory use happen here
         return []
