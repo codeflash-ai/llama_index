@@ -61,14 +61,21 @@ class FixedRecencyPostprocessor(BaseNodePostprocessor):
         if query_bundle is None:
             raise ValueError("Missing query bundle in extra info.")
 
-        # sort nodes by date
-        node_dates = pd.to_datetime(
-            [node.node.metadata[self.date_key] for node in nodes]
-        )
-        sorted_node_idxs = np.flip(node_dates.argsort())
-        sorted_nodes = [nodes[idx] for idx in sorted_node_idxs]
+        # Extract dates in one shot using list comprehension
+        dates = [node.node.metadata[self.date_key] for node in nodes]
 
-        return sorted_nodes[: self.top_k]
+        # Use numpy to parse dates and argsort
+        node_dates = np.array(pd.to_datetime(dates))
+        # Directly get top_k indices for latest dates, in descending order
+        if self.top_k >= len(nodes):
+            sorted_node_idxs = np.argsort(node_dates)[::-1]
+        else:
+            # Get the indices for the top 'top_k' most recent dates, descending
+            sorted_node_idxs = np.argpartition(node_dates, -self.top_k)[-self.top_k:]
+            sorted_node_idxs = sorted_node_idxs[np.argsort(node_dates[sorted_node_idxs])[::-1]]
+
+        sorted_nodes = [nodes[idx] for idx in sorted_node_idxs]
+        return sorted_nodes[:self.top_k]
 
 
 DEFAULT_QUERY_EMBEDDING_TMPL = (
