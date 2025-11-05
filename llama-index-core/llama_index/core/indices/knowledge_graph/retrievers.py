@@ -485,9 +485,8 @@ class KnowledgeGraphRAGRetriever(BaseRetriever):
         self._retriever_mode = retriever_mode
         self._with_nl2graphquery = with_nl2graphquery
         if self._with_nl2graphquery:
-            from llama_index.core.query_engine.knowledge_graph_query_engine import (
-                KnowledgeGraphQueryEngine,
-            )
+            from llama_index.core.query_engine.knowledge_graph_query_engine import \
+                KnowledgeGraphQueryEngine
 
             graph_query_synthesis_prompt = kwargs.get(
                 "graph_query_synthesis_prompt",
@@ -526,6 +525,8 @@ class KnowledgeGraphRAGRetriever(BaseRetriever):
         except NotImplementedError:
             self._graph_schema = ""
         except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
             logger.warning(f"Failed to get graph schema: {e}")
             self._graph_schema = ""
 
@@ -594,41 +595,54 @@ class KnowledgeGraphRAGRetriever(BaseRetriever):
         result_start_token: str = "KEYWORDS:",
     ) -> List[str]:
         """Get entities from query string."""
-        assert cross_handle_policy in [
-            "union",
-            "intersection",
-        ], "Invalid entity extraction policy."
+
+        # Use single assert to check cross_handle_policy membership
+        if cross_handle_policy not in ("union", "intersection"):
+            raise AssertionError("Invalid entity extraction policy.")
+
+        # Single assert for function handles (intersection case)
         if cross_handle_policy == "intersection":
-            assert all(
-                [
-                    handle_fn is not None,
-                    handle_llm_prompt_template is not None,
-                ]
-            ), "Must provide entity extract function and template."
-        assert any(
-            [
-                handle_fn is not None,
-                handle_llm_prompt_template is not None,
-            ]
-        ), "Must provide either entity extract function or template."
-        enitities_fn: List[str] = []
-        enitities_llm: Set[str] = set()
+            if not (handle_fn is not None and handle_llm_prompt_template is not None):
+                raise AssertionError("Must provide entity extract function and template.")
+
+        # Single assert for at least one extractor (union case)
+        if not (handle_fn is not None or handle_llm_prompt_template is not None):
+            raise AssertionError("Must provide either entity extract function or template.")
+
+        # Allocate empty entities only once
+        entities_fn: List[str]
+        entities_llm: Set[str]
+
 
         if handle_fn is not None:
-            enitities_fn = handle_fn(query_str)
+            entities_fn = handle_fn(query_str)
+        else:
+            entities_fn = []  # Avoid set([]) later
         if handle_llm_prompt_template is not None:
             response = await self._llm.apredict(
                 handle_llm_prompt_template,
                 max_keywords=max_items,
                 question=query_str,
             )
-            enitities_llm = extract_keywords_given_response(
+            entities_llm = extract_keywords_given_response(
                 response, start_token=result_start_token, lowercase=False
             )
+        else:
+            entities_llm = set()
+
+        # Optimize set construction usage and use conditional checks to avoid constructing sets multiple times
+        set_fn = set(entities_fn)
         if cross_handle_policy == "union":
-            entities = list(set(enitities_fn) | enitities_llm)
-        elif cross_handle_policy == "intersection":
-            entities = list(set(enitities_fn).intersection(set(enitities_llm)))
+            if entities_llm:
+                entities = list(set_fn | entities_llm)
+            else:
+                entities = list(set_fn)
+        else:  # intersection
+            if entities_llm:
+                entities = list(set_fn & entities_llm)
+            else:
+                entities = []
+
         if self._verbose:
             print_text(f"Entities processed: {entities}\n", color="green")
 
@@ -673,8 +687,13 @@ class KnowledgeGraphRAGRetriever(BaseRetriever):
 
     async def _aexpand_synonyms(self, keywords: List[str]) -> List[str]:
         """Expand synonyms or similar expressions for keywords."""
+        # Skip str(keywords) conversion if already a str, otherwise join with comma for clarity/performance
+        if isinstance(keywords, str):
+            keywords_str = keywords
+        else:
+            keywords_str = ", ".join(keywords)
         return await self._aprocess_entities(
-            str(keywords),
+            keywords_str,
             self._synonym_expand_fn,
             self._synonym_expand_template,
             self._synonym_expand_policy,
