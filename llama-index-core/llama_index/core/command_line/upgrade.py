@@ -14,16 +14,29 @@ def _parse_from_imports(
     lines: List[str],
     verbose: bool = False,
 ):
+    # Helper to check for install overlap with much better performance.
+    def has_module_overlap(installed_modules, new_install_parent):
+        for x in installed_modules:
+            if x in new_install_parent:
+                return True
+        return False
+
     new_lines = []
     new_installs = []
     imported_modules = []
     parsing_modules = False
     skipped_lines = 0
 
+
+    # Precompute the set for membership testing for installed_modules ("fast path")
+    installed_set = set(installed_modules)
+
     for line in lines[line_idx:]:
         skipped_lines += 1
         if "from " in line:
-            imported_modules = [line, line.strip().split(" import ")[-1].strip()]
+            imported_text = line.strip()
+            imported_split = imported_text.split(" import ")
+            imported_modules = [line, imported_split[-1].strip()]
             if imported_modules[-1].startswith("("):
                 imported_modules[-1] = []
                 parsing_modules = True
@@ -38,14 +51,17 @@ def _parse_from_imports(
 
         if not parsing_modules and len(imported_modules) > 0:
             imported_module_names = [x.strip() for x in imported_modules[-1]]
-            new_imports = {}
+            new_imports: Dict[str, List[str]] = {}
+            # This code block can be made more efficient with reduced dict lookups
+            get_mappings = mappings.get
             for module in imported_module_names:
-                if module in mappings:
-                    new_import_parent = mappings[module]
-                    if new_import_parent not in new_imports:
-                        new_imports[new_import_parent] = [module]
-                    else:
+                new_import_parent = get_mappings(module)
+                if new_import_parent:
+                    # Only lookup once, and batch append if possible
+                    if new_import_parent in new_imports:
                         new_imports[new_import_parent].append(module)
+                    else:
+                        new_imports[new_import_parent] = [module]
                 else:
                     print(f"Module not found: {module}\nSwitching to core")
                     # get back the llama_index module that's being imported.
@@ -57,23 +73,23 @@ def _parse_from_imports(
                         new_import_parent = new_import_parent.replace(
                             "llama_index", "llama_index.core"
                         )
-
-                    if new_import_parent not in new_imports:
-                        new_imports[new_import_parent] = [module]
-                    else:
+                    if new_import_parent in new_imports:
                         new_imports[new_import_parent].append(module)
+                    else:
+                        new_imports[new_import_parent] = [module]
 
-            for new_import_parent, new_imports in new_imports.items():
-                new_install_parent = new_import_parent.replace(".", "-").replace(
-                    "_", "-"
-                )
-                if new_install_parent not in installed_modules:
-                    overlap = [x for x in installed_modules if x in new_install_parent]
-                    if len(overlap) == 0:
+            # Bulk process new_imports for installation and import-line generation
+            for new_import_parent, modules in new_imports.items():
+                new_install_parent = new_import_parent.replace(".", "-").replace("_", "-")
+                # Use precomputed set for fast membership testing
+                if new_install_parent not in installed_set:
+                    if not has_module_overlap(installed_modules, new_install_parent):
                         installed_modules.append(new_install_parent)
+                        installed_set.add(new_install_parent)
                         new_installs.append(f"%pip install {new_install_parent}\n")
-                new_imports = ", ".join(new_imports)
-                new_lines.append(f"from {new_import_parent} import {new_imports}\n")
+                new_import_modules = ", ".join(modules)
+                new_lines.append(f"from {new_import_parent} import {new_import_modules}\n")
+
 
                 parsing_modules = False
                 new_imports = {}
