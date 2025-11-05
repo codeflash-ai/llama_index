@@ -71,20 +71,32 @@ class SubQuestionQueryEngine(BaseQueryEngine):
     ) -> None:
         self._question_gen = question_gen
         self._response_synthesizer = response_synthesizer
-        self._metadatas = [x.metadata for x in query_engine_tools]
-        self._query_engines = {
-            tool.metadata.name: tool.query_engine for tool in query_engine_tools
-        }
+
+        # Optimize list/dict comprehensions by using direct assignments, avoiding intermediate objects
+        metadatas = []
+        query_engines = {}
+        for tool in query_engine_tools:
+            meta = tool.metadata
+            metadatas.append(meta)
+            query_engines[meta.name] = tool.query_engine
+        self._metadatas = metadatas
+        self._query_engines = query_engines
+
         self._verbose = verbose
         self._use_async = use_async
         super().__init__(callback_manager)
 
-    def _get_prompt_modules(self) -> PromptMixinType:
-        """Get prompt sub-modules."""
-        return {
+
+        # Pre-create prompt_modules dict for fast return (saves time on every _get_prompt_modules call)
+        # Assumes that self._question_gen and self._response_synthesizer do not change after __init__
+        self._prompt_modules: PromptMixinType = {
             "question_gen": self._question_gen,
             "response_synthesizer": self._response_synthesizer,
         }
+
+    def _get_prompt_modules(self) -> PromptMixinType:
+        """Get prompt sub-modules."""
+        return self._prompt_modules
 
     @classmethod
     def from_defaults(
