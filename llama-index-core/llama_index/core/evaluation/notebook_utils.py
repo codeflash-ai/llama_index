@@ -47,29 +47,28 @@ def get_eval_results_df(
     if len(names) != len(results_arr):
         raise ValueError("names and results_arr must have same length.")
 
-    qs = []
-    ss = []
-    fs = []
-    rs = []
-    cs = []
-    for res in results_arr:
-        qs.append(res.query)
-        ss.append(res.score)
-        fs.append(res.feedback)
-        rs.append(res.response)
-        cs.append(res.contexts)
+    # Extract columns in a single pass using list comprehensions for faster performance
+    qs = [res.query for res in results_arr]
+    ss = [res.score for res in results_arr]
+    fs = [res.feedback for res in results_arr]
+    rs = [res.response for res in results_arr]
+    cs = [res.contexts for res in results_arr]
 
-    deep_df = pd.DataFrame(
-        {
-            "rag": names,
-            "query": qs,
-            "answer": rs,
-            "contexts": cs,
-            "scores": ss,
-            "feedbacks": fs,
-        }
-    )
-    mean_df = pd.DataFrame(deep_df.groupby(["rag"])["scores"].mean()).T
+    # Construct DataFrame directly
+    data = {
+        "rag": names,
+        "query": qs,
+        "answer": rs,
+        "contexts": cs,
+        "scores": ss,
+        "feedbacks": fs,
+    }
+    deep_df = pd.DataFrame(data, copy=False)
+
+    # Groupby and mean can be done faster via a Series for a single column, get in dict then make DataFrame and transpose
+    mean_series = deep_df.groupby("rag", sort=False)["scores"].mean()
+    mean_df = pd.DataFrame(mean_series).T
+
     if metric:
         mean_df.index = [f"mean_{metric}_score"]
 
