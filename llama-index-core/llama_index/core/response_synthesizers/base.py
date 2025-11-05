@@ -211,7 +211,9 @@ class BaseSynthesizer(ChainableMixin, PromptMixin):
         if isinstance(query, str):
             query = QueryBundle(query_str=query)
 
-        with self._callback_manager.event(
+        callback_manager = self._callback_manager
+
+        with callback_manager.event(
             CBEventType.SYNTHESIZE, payload={EventPayload.QUERY_STR: query.query_str}
         ) as event:
             response_str = await self.aget_response(

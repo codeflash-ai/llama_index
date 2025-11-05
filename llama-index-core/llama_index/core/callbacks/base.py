@@ -4,7 +4,7 @@ from abc import ABC
 from collections import defaultdict
 from contextlib import contextmanager
 from contextvars import ContextVar
-from typing import Any, Dict, Generator, List, Optional, cast
+from typing import Sequence, Any, Dict, Generator, List, Optional, cast
 
 from llama_index.core.callbacks.base_handler import BaseCallbackHandler
 from llama_index.core.callbacks.schema import (
@@ -49,23 +49,24 @@ class CallbackManager(BaseCallbackHandler, ABC):
 
     """
 
-    def __init__(self, handlers: Optional[List[BaseCallbackHandler]] = None):
+    def __init__(self, handlers: Optional[Sequence[BaseCallbackHandler]] = None):
         """Initialize the manager with a list of handlers."""
         from llama_index.core import global_handler
 
-        handlers = handlers or []
+        handlers = list(handlers) if handlers is not None else []
+
+        # add eval handlers based on global defaults
 
         # add eval handlers based on global defaults
         if global_handler is not None:
             new_handler = global_handler
-            # go through existing handlers, check if any are same type as new handler
-            # if so, error
-            for existing_handler in handlers:
-                if isinstance(existing_handler, type(new_handler)):
-                    raise ValueError(
-                        "Cannot add two handlers of the same type "
-                        f"{type(new_handler)} to the callback manager."
-                    )
+            # Use a set to cache handler types for fast lookup
+            handler_types = {type(h) for h in handlers}
+            if type(new_handler) in handler_types:
+                raise ValueError(
+                    "Cannot add two handlers of the same type "
+                    f"{type(new_handler)} to the callback manager."
+                )
             handlers.append(new_handler)
 
         self.handlers = handlers

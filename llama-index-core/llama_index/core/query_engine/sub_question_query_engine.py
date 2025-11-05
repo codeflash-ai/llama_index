@@ -180,33 +180,43 @@ class SubQuestionQueryEngine(BaseQueryEngine):
         return response
 
     async def _aquery(self, query_bundle: QueryBundle) -> RESPONSE_TYPE:
-        with self.callback_manager.event(
+        callback_manager = self.callback_manager
+        question_gen = self._question_gen
+        metadatas = self._metadatas
+        verbose = self._verbose
+        aquery_subq = self._aquery_subq
+        response_synthesizer = self._response_synthesizer
+
+        with callback_manager.event(
             CBEventType.QUERY, payload={EventPayload.QUERY_STR: query_bundle.query_str}
         ) as query_event:
-            sub_questions = await self._question_gen.agenerate(
-                self._metadatas, query_bundle
+            sub_questions = await question_gen.agenerate(
+                metadatas, query_bundle
             )
 
-            colors = get_color_mapping([str(i) for i in range(len(sub_questions))])
+            num_sub_questions = len(sub_questions)
+            colors = get_color_mapping([str(i) for i in range(num_sub_questions)])
 
-            if self._verbose:
-                print_text(f"Generated {len(sub_questions)} sub questions.\n")
+            if verbose:
+                print_text(f"Generated {num_sub_questions} sub questions.\n")
+
+            # Use list comprehension outside gather to avoid passing variables via closure every loop.
 
             tasks = [
-                self._aquery_subq(sub_q, color=colors[str(ind)])
+                aquery_subq(sub_q, color=colors[str(ind)])
                 for ind, sub_q in enumerate(sub_questions)
             ]
 
             qa_pairs_all = await asyncio.gather(*tasks)
-            qa_pairs_all = cast(List[Optional[SubQuestionAnswerPair]], qa_pairs_all)
 
-            # filter out sub questions that failed
-            qa_pairs: List[SubQuestionAnswerPair] = list(filter(None, qa_pairs_all))
+            # filter out sub questions that failed (i.e., return is not None)
+            qa_pairs: List[SubQuestionAnswerPair] = [pair for pair in qa_pairs_all if pair is not None]
+
 
             nodes = [self._construct_node(pair) for pair in qa_pairs]
 
             source_nodes = [node for qa_pair in qa_pairs for node in qa_pair.sources]
-            response = await self._response_synthesizer.asynthesize(
+            response = await response_synthesizer.asynthesize(
                 query=query_bundle,
                 nodes=nodes,
                 additional_source_nodes=source_nodes,
