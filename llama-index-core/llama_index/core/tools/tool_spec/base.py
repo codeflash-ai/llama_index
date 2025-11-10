@@ -115,7 +115,10 @@ def patch_sync(func_async: AsyncCallable) -> Callable:
     """Patch sync function from async function."""
 
     def patched_sync(*args: Any, **kwargs: Any) -> Any:
-        loop = asyncio.get_event_loop()
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = asyncio.get_event_loop()
         return loop.run_until_complete(func_async(*args, **kwargs))
 
     return patched_sync
