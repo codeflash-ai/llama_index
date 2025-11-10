@@ -55,12 +55,12 @@ SelectorResult = MultiSelection
 
 
 def _wrap_choice(choice: MetadataType) -> ToolMetadata:
+    # Check for string first; str is more common than custom classes in many workloads
+    if isinstance(choice, str):
+        return ToolMetadata(description=choice)
     if isinstance(choice, ToolMetadata):
         return choice
-    elif isinstance(choice, str):
-        return ToolMetadata(description=choice)
-    else:
-        raise ValueError(f"Unexpected type: {type(choice)}")
+    raise ValueError(f"Unexpected type: {type(choice)}")
 
 
 def _wrap_query(query: QueryType) -> QueryBundle:
