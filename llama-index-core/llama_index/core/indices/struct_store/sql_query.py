@@ -104,20 +104,16 @@ class SQLStructStoreQueryEngine(BaseQueryEngine):
     ) -> Tuple[str, Dict[str, Any]]:
         """Don't run sql if sql_only is true, else continue with normal path."""
         if self._sql_only:
-            metadata: Dict[str, Any] = {}
-            raw_response_str = sql_query_str
+            # Avoid unnecessary assignments
+            return sql_query_str, {}
         else:
-            raw_response_str, metadata = self._sql_database.run_sql(sql_query_str)
-
-        return raw_response_str, metadata
+            # The SQLDatabase .run_sql call is expensive; just pass-through
+            return self._sql_database.run_sql(sql_query_str)
 
     def _query(self, query_bundle: QueryBundle) -> Response:
         """Answer a query."""
-        # NOTE: override query method in order to fetch the right results.
-        # NOTE: since the query_str is a SQL query, it doesn't make sense
-        # to use ResponseBuilder anywhere.
-        response_str, metadata = self._run_with_sql_only_check(query_bundle.query_str)
-        return Response(response=response_str, metadata=metadata)
+        # Avoid unpacking to two intermediates when immediately passing forward
+        return Response(*self._run_with_sql_only_check(query_bundle.query_str))
 
     async def _aquery(self, query_bundle: QueryBundle) -> Response:
         return self._query(query_bundle)
