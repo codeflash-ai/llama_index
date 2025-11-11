@@ -59,13 +59,14 @@ class CallbackManager(BaseCallbackHandler, ABC):
         if global_handler is not None:
             new_handler = global_handler
             # go through existing handlers, check if any are same type as new handler
-            # if so, error
-            for existing_handler in handlers:
-                if isinstance(existing_handler, type(new_handler)):
-                    raise ValueError(
-                        "Cannot add two handlers of the same type "
-                        f"{type(new_handler)} to the callback manager."
-                    )
+            if any(
+                isinstance(existing_handler, type(new_handler))
+                for existing_handler in handlers
+            ):
+                raise ValueError(
+                    "Cannot add two handlers of the same type "
+                    f"{type(new_handler)} to the callback manager."
+                )
             handlers.append(new_handler)
 
         self.handlers = handlers
@@ -163,22 +164,20 @@ class CallbackManager(BaseCallbackHandler, ABC):
         # create event context wrapper
         event = EventContext(self, event_type, event_id=event_id)
         event.on_start(payload=payload)
-
-        payload = None
         try:
             yield event
         except Exception as e:
             # data already logged to trace?
             if not hasattr(e, "event_added"):
-                payload = {EventPayload.EXCEPTION: e}
+                err_payload = {EventPayload.EXCEPTION: e}
                 e.event_added = True  # type: ignore
                 if not event.finished:
-                    event.on_end(payload=payload)
+                    event.on_end(payload=err_payload)
             raise
         finally:
             # ensure event is ended
             if not event.finished:
-                event.on_end(payload=payload)
+                event.on_end()
 
     @contextmanager
     def as_trace(self, trace_id: str) -> Generator[None, None, None]:
