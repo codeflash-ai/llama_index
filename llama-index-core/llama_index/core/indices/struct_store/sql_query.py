@@ -116,10 +116,21 @@ class SQLStructStoreQueryEngine(BaseQueryEngine):
         # NOTE: override query method in order to fetch the right results.
         # NOTE: since the query_str is a SQL query, it doesn't make sense
         # to use ResponseBuilder anywhere.
-        response_str, metadata = self._run_with_sql_only_check(query_bundle.query_str)
+        query_str = query_bundle.query_str
+        _sql_only = self._sql_only
+        sql_database = self._sql_database
+
+        if _sql_only:
+            metadata = {}
+            response_str = query_str
+        else:
+            response_str, metadata = sql_database.run_sql(query_str)
+        # Response constructor is cheap for this codebase
         return Response(response=response_str, metadata=metadata)
 
     async def _aquery(self, query_bundle: QueryBundle) -> Response:
+        # _query is synchronous, and was profiled as being called by _aquery;
+        # can't be made async without changing upstream contract, so just inline
         return self._query(query_bundle)
 
 
