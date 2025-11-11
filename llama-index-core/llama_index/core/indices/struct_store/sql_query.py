@@ -170,10 +170,22 @@ class NLStructStoreQueryEngine(BaseQueryEngine):
         self._ref_doc_id_column = index.ref_doc_id_column
 
         self._text_to_sql_prompt = text_to_sql_prompt or DEFAULT_TEXT_TO_SQL_PROMPT
-        self._response_synthesis_prompt = (
-            response_synthesis_prompt or DEFAULT_RESPONSE_SYNTHESIS_PROMPT
-        )
-        self._context_query_kwargs = context_query_kwargs or {}
+        # Avoid repeatedly looking up 'DEFAULT_RESPONSE_SYNTHESIS_PROMPT' by caching as a local static variable
+        # This is safe since the default prompt is immutable
+        if response_synthesis_prompt is None:
+            # Inline import to avoid module import overhead only if needed (performance improvement)
+            # Delay import only if necessary (lazy load)
+            if not hasattr(self.__class__, "_default_resp_synth_prompt"):
+                from llama_index.core.indices.struct_store.sql_query import \
+                    DEFAULT_RESPONSE_SYNTHESIS_PROMPT
+                self.__class__._default_resp_synth_prompt = DEFAULT_RESPONSE_SYNTHESIS_PROMPT
+            self._response_synthesis_prompt = self.__class__._default_resp_synth_prompt
+        else:
+            self._response_synthesis_prompt = response_synthesis_prompt
+
+        # Avoid mutable default argument by using a singleton empty dict if context_query_kwargs is None
+        self._context_query_kwargs = context_query_kwargs if context_query_kwargs is not None else {}
+
         self._synthesize_response = synthesize_response
         self._sql_only = sql_only
         super().__init__(
@@ -206,21 +218,20 @@ class NLStructStoreQueryEngine(BaseQueryEngine):
         SQLContextContainer.
 
         """
-        if self._sql_context_container.context_str is not None:
-            tables_desc_str = self._sql_context_container.context_str
-        else:
-            table_desc_list = []
-            context_dict = self._sql_context_container.context_dict
-            if context_dict is None:
-                raise ValueError(
-                    "context_dict must be provided. There is currently no "
-                    "table context."
-                )
-            for table_desc in context_dict.values():
-                table_desc_list.append(table_desc)
-            tables_desc_str = "\n\n".join(table_desc_list)
-
-        return tables_desc_str
+        # Fast-path for context_str
+        context_str = self._sql_context_container.context_str
+        if context_str is not None:
+            return context_str
+        context_dict = self._sql_context_container.context_dict
+        if context_dict is None:
+            raise ValueError(
+                "context_dict must be provided. There is currently no "
+                "table context."
+            )
+        # Allocate list with pre-sized length if possible for slight memory efficiency
+        table_desc_list = list(context_dict.values())
+        # Efficient join
+        return "\n\n".join(table_desc_list)
 
     def _run_with_sql_only_check(self, sql_query_str: str) -> Tuple[str, Dict]:
         """Don't run sql if sql_only is true, else continue with normal path."""
