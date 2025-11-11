@@ -189,7 +189,8 @@ class SentenceSplitter(MetadataAwareTextSplitter):
         return chunks
 
     def _split(self, text: str, chunk_size: int) -> List[_Split]:
-        r"""Break text into splits that are smaller than chunk size.
+        """Break text into splits that are smaller than chunk size.
+
 
         The order of splitting is:
         1. split by paragraph separator
@@ -199,20 +200,21 @@ class SentenceSplitter(MetadataAwareTextSplitter):
 
         """
         token_size = self._token_size(text)
-        if self._token_size(text) <= chunk_size:
+        if token_size <= chunk_size:
             return [_Split(text, is_sentence=True, token_size=token_size)]
 
         text_splits_by_fns, is_sentence = self._get_splits_by_fns(text)
 
         text_splits = []
-        for text_split_by_fns in text_splits_by_fns:
-            token_size = self._token_size(text_split_by_fns)
-            if token_size <= chunk_size:
+        # Precompute token sizes for splits in batch for memory and speed efficiency
+        token_sizes = self._token_size_batch(text_splits_by_fns)
+        for text_split_by_fns, split_token_size in zip(text_splits_by_fns, token_sizes):
+            if split_token_size <= chunk_size:
                 text_splits.append(
                     _Split(
                         text_split_by_fns,
                         is_sentence=is_sentence,
-                        token_size=token_size,
+                        token_size=split_token_size,
                     )
                 )
             else:
@@ -314,3 +316,15 @@ class SentenceSplitter(MetadataAwareTextSplitter):
                 break
 
         return splits, False
+
+    def _token_size_batch(self, texts: List[str]) -> List[int]:
+        """Compute token size for a batch of texts"""
+        tokenizer = self._tokenizer
+        try:
+            # If the tokenizer can take a list of strings, use it
+            # Some tokenizer (e.g., tiktoken) support batch, others don't
+            tokens_lists = tokenizer(texts)
+            return [len(tokens) for tokens in tokens_lists]
+        except Exception:
+            # Per string fallback
+            return [len(tokenizer(text)) for text in texts]
