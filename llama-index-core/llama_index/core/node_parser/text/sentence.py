@@ -230,34 +230,44 @@ class SentenceSplitter(MetadataAwareTextSplitter):
         cur_chunk_len = 0
         new_chunk = True
 
-        def close_chunk() -> None:
-            nonlocal chunks, cur_chunk, last_chunk, cur_chunk_len, new_chunk
 
-            chunks.append("".join([text for text, length in cur_chunk]))
+        # Pre-allocate 'chunks_append' for repeated use
+        chunks_append = chunks.append
+
+        # Avoid repeated attribute lookup in tight loops
+        chunk_overlap = self.chunk_overlap
+
+        def close_chunk() -> None:
+            nonlocal cur_chunk, last_chunk, cur_chunk_len, new_chunk
+            chunks_append("".join(text for text, _ in cur_chunk))
             last_chunk = cur_chunk
             cur_chunk = []
             cur_chunk_len = 0
             new_chunk = True
 
-            # add overlap to the next chunk using the last one first
-            # there is a small issue with this logic. If the chunk directly after
-            # the overlap is really big, then we could go over the chunk_size, and
-            # in theory the correct thing to do would be to remove some/all of the
-            # overlap. However, it would complicate the logic further without
-            # much real world benefit, so it's not implemented now.
-            if len(last_chunk) > 0:
+            # Add overlap to the next chunk using the last one first
+            if last_chunk:
                 last_index = len(last_chunk) - 1
-                while (
-                    last_index >= 0
-                    and cur_chunk_len + last_chunk[last_index][1] <= self.chunk_overlap
-                ):
-                    text, length = last_chunk[last_index]
-                    cur_chunk_len += length
-                    cur_chunk.insert(0, (text, length))
+                overlap_len = 0
+                overlap = []
+                # Build the overlap list in reversed order, so only insert once at end
+                while last_index >= 0 and overlap_len + last_chunk[last_index][1] <= chunk_overlap:
+                    overlap_len += last_chunk[last_index][1]
+                    overlap.append(last_chunk[last_index])
                     last_index -= 1
+                if overlap:
+                    # Instead of inserting one by one, reverse and extend
+                    overlap.reverse()
+                    cur_chunk[0:0] = overlap
+                    cur_chunk_len += overlap_len
 
-        while len(splits) > 0:
-            cur_split = splits[0]
+        splits_pop = splits.pop
+
+        # Use i-index for reduced pop overhead when chunk sizes are large
+        i = 0
+        splits_len = len(splits)
+        while i < splits_len:
+            cur_split = splits[i]
             if cur_split.token_size > chunk_size:
                 raise ValueError("Single token exceeded chunk size")
             if cur_chunk_len + cur_split.token_size > chunk_size and not new_chunk:
@@ -272,16 +282,26 @@ class SentenceSplitter(MetadataAwareTextSplitter):
                     # add split to chunk
                     cur_chunk_len += cur_split.token_size
                     cur_chunk.append((cur_split.text, cur_split.token_size))
-                    splits.pop(0)
+                    i += 1
                     new_chunk = False
                 else:
                     # close out chunk
                     close_chunk()
 
         # handle the last chunk
+            splits_len = len(splits)  # Update splits_len since we may pop elements
+
+            # When we add elements by pop, we should make sure to remove used splits
+            # Actually for the original logic, pop(0) is used, but using index avoids the O(n) overhead
+            # So, at the end after building all chunks, drop all processed splits
+        if i:
+            del splits[:i]
+
+        # Handle the last chunk
         if not new_chunk:
-            chunk = "".join([text for text, length in cur_chunk])
-            chunks.append(chunk)
+            chunks_append("".join(text for text, _ in cur_chunk))
+
+        # Run postprocessing to remove blank spaces
 
         # run postprocessing to remove blank spaces
         return self._postprocess_chunks(chunks)
@@ -290,13 +310,8 @@ class SentenceSplitter(MetadataAwareTextSplitter):
         """Post-process chunks.
         Remove whitespace only chunks and remove leading and trailing whitespace.
         """
-        new_chunks = []
-        for chunk in chunks:
-            stripped_chunk = chunk.strip()
-            if stripped_chunk == "":
-                continue
-            new_chunks.append(stripped_chunk)
-        return new_chunks
+        # Minor speedup using list comprehension instead of loop
+        return [chunk.strip() for chunk in chunks if chunk.strip()]
 
     def _token_size(self, text: str) -> int:
         return len(self._tokenizer(text))
