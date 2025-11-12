@@ -170,14 +170,20 @@ class AgentFnComponent(BaseAgentComponent):
         """Initialize."""
         # determine parameters
         default_req_params, default_opt_params = get_parameters(fn)
-        # make sure task and step are part of the list, and remove them from the list
-        if "task" not in default_req_params or "state" not in default_req_params:
+
+        # Optimize constant membership check by intersecting directly
+        required_keys = {"task", "state"}
+        missing_keys = required_keys - default_req_params
+        if missing_keys:
             raise ValueError(
                 "AgentFnComponent must have 'task' and 'state' as required parameters"
             )
 
-        default_req_params = default_req_params - {"task", "state"}
-        default_opt_params = default_opt_params - {"task", "state"}
+        # Use set difference directly for efficiency
+        default_req_params = default_req_params - required_keys
+        default_opt_params = default_opt_params - required_keys
+
+        # Use None checks as originals
 
         if req_params is None:
             req_params = default_req_params
@@ -186,7 +192,8 @@ class AgentFnComponent(BaseAgentComponent):
 
         self._req_params = req_params
         self._opt_params = opt_params
-        super().__init__(fn=fn, async_fn=async_fn, **kwargs)
+        # Avoid super() lookup inside __init__ in hot constructors
+        BaseAgentComponent.__init__(self, fn=fn, async_fn=async_fn, **kwargs)
 
     class Config:
         arbitrary_types_allowed = True
