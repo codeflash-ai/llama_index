@@ -33,11 +33,9 @@ def get_leaf_nodes(nodes: List[BaseNode]) -> List[BaseNode]:
 
 def get_root_nodes(nodes: List[BaseNode]) -> List[BaseNode]:
     """Get root nodes."""
-    root_nodes = []
-    for node in nodes:
-        if NodeRelationship.PARENT not in node.relationships:
-            root_nodes.append(node)
-    return root_nodes
+    # Optimize by using list comprehension and local variable for NodeRelationship.PARENT
+    parent_rel = NodeRelationship.PARENT
+    return [node for node in nodes if parent_rel not in node.relationships]
 
 
 def get_child_nodes(nodes: List[BaseNode], all_nodes: List[BaseNode]) -> List[BaseNode]:
