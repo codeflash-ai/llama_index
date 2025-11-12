@@ -24,8 +24,7 @@ class BaseReader(ABC):
 
     def load_langchain_documents(self, **load_kwargs: Any) -> List["LCDocument"]:
         """Load data in LangChain document format."""
-        docs = self.load_data(**load_kwargs)
-        return [d.to_langchain_format() for d in docs]
+        return [d.to_langchain_format() for d in self.lazy_load_data(**load_kwargs)]
 
 
 class BasePydanticReader(BaseReader, BaseComponent):
