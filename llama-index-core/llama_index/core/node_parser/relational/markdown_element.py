@@ -12,25 +12,46 @@ from llama_index.core.schema import BaseNode, TextNode
 def md_to_df(md_str: str) -> pd.DataFrame:
     """Convert Markdown to dataframe."""
     # Replace " by "" in md_str
-    md_str = md_str.replace('"', '""')
+    # Early out if empty string provided
+    if not md_str:
+        return None
 
-    # Replace markdown pipe tables with commas
-    md_str = md_str.replace("|", '","')
+    # Replace " by "" in md_str (to escape quotes for CSV)
+    md_str = md_str.replace('"', '""')
 
     # Remove the second line (table header separator)
     lines = md_str.split("\n")
-    md_str = "\n".join(lines[:1] + lines[2:])
-
-    # Remove the first and last second char of the line (the pipes, transformed to ",")
-    lines = md_str.split("\n")
-    md_str = "\n".join([line[2:-2] for line in lines])
-
-    # Check if the table is empty
-    if len(md_str) == 0:
+    # Fast check: table must have a header + at least one content line
+    if len(lines) < 3:
         return None
 
-    # Use pandas to read the CSV string into a DataFrame
-    return pd.read_csv(StringIO(md_str))
+    # Remove the second line (table header separator)
+    filtered_lines = [lines[0]] + lines[2:]
+    if not filtered_lines:
+        return None
+
+    # For each line, replace pipes and trim start/end as described
+    # Avoids repeated splits/joins and operates in one pass
+    new_lines = []
+    for line in filtered_lines:
+        if len(line) < 4:  # must have at least two chars to trim each side
+            continue
+        # Replace | with "," for csv compatibility
+        newline = line.replace("|", '","')
+        # Remove the first and last two characters
+        newline = newline[2:-2]
+        new_lines.append(newline)
+
+    if not new_lines:
+        return None
+
+    md_csv_str = "\n".join(new_lines)
+
+    # Use pandas to read the CSV string into a DataFrame if not empty
+    if not md_csv_str:
+        return None
+
+    return pd.read_csv(StringIO(md_csv_str))
 
 
 class MarkdownElementNodeParser(BaseElementNodeParser):
@@ -219,6 +240,5 @@ class MarkdownElementNodeParser(BaseElementNodeParser):
     def filter_table(self, table_element: Any) -> bool:
         """Filter tables."""
         table_df = md_to_df(table_element.element)
-
         # check if table_df is not None, has more than one row, and more than one column
         return table_df is not None and not table_df.empty and len(table_df.columns) > 1
