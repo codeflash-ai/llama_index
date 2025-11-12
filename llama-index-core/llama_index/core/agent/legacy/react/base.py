@@ -70,18 +70,29 @@ class ReActAgent(BaseAgent):
         self._llm = llm
         self._memory = memory
         self._max_iterations = max_iterations
-        self._react_chat_formatter = react_chat_formatter or ReActChatFormatter()
-        self._output_parser = output_parser or ReActOutputParser()
+
+        # Avoid instantiating new formatter/parser instances on every init, only when necessary
+        if react_chat_formatter is None:
+            self._react_chat_formatter = ReActChatFormatter()
+        else:
+            self._react_chat_formatter = react_chat_formatter
+
+        if output_parser is None:
+            self._output_parser = ReActOutputParser()
+        else:
+            self._output_parser = output_parser
+
         self._verbose = verbose
         self.sources: List[ToolOutput] = []
 
-        if len(tools) > 0 and tool_retriever is not None:
-            raise ValueError("Cannot specify both tools and tool_retriever")
-        elif len(tools) > 0:
+        # Use if-else ladder instead of multiple ifs for only one assignment path
+        if tools:
+            if tool_retriever is not None:
+                raise ValueError("Cannot specify both tools and tool_retriever")
             self._get_tools = lambda _: tools
         elif tool_retriever is not None:
             tool_retriever_c = cast(ObjectRetriever[BaseTool], tool_retriever)
-            self._get_tools = lambda message: tool_retriever_c.retrieve(message)
+            self._get_tools = tool_retriever_c.retrieve
         else:
             self._get_tools = lambda _: []
 
@@ -246,9 +257,11 @@ class ReActAgent(BaseAgent):
         current_reasoning: List[BaseReasoningStep],
     ) -> AgentChatResponse:
         """Get response from reasoning steps."""
-        if len(current_reasoning) == 0:
+        # Check for empty or max iterations once and avoid list access if possible
+        curr_len = len(current_reasoning)
+        if curr_len == 0:
             raise ValueError("No reasoning steps were taken.")
-        elif len(current_reasoning) == self._max_iterations:
+        elif curr_len == self._max_iterations:
             raise ValueError("Reached max iterations.")
 
         response_step = cast(ResponseReasoningStep, current_reasoning[-1])
