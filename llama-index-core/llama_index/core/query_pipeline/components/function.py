@@ -77,7 +77,8 @@ class FnComponent(QueryComponent):
     def _validate_component_inputs(self, input: Dict[str, Any]) -> Dict[str, Any]:
         """Validate component inputs during run_component."""
         # check that all required parameters are present
-        missing_params = self._req_params - set(input.keys())
+        input_keys = set(input.keys())
+        missing_params = self._req_params - input_keys
         if missing_params:
             raise ValueError(
                 f"Missing required parameters: {missing_params}. "
@@ -85,7 +86,7 @@ class FnComponent(QueryComponent):
             )
 
         # check that no extra parameters are present
-        extra_params = set(input.keys()) - self._req_params - self._opt_params
+        extra_params = input_keys - self._req_params - self._opt_params
         if extra_params:
             raise ValueError(
                 f"Extra parameters: {extra_params}. " f"Input keys: {input.keys()}"
