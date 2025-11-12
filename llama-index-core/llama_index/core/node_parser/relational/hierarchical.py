@@ -24,11 +24,8 @@ def _add_parent_child_relationship(parent_node: BaseNode, child_node: BaseNode) 
 
 def get_leaf_nodes(nodes: List[BaseNode]) -> List[BaseNode]:
     """Get leaf nodes."""
-    leaf_nodes = []
-    for node in nodes:
-        if NodeRelationship.CHILD not in node.relationships:
-            leaf_nodes.append(node)
-    return leaf_nodes
+    child_rel = NodeRelationship.CHILD
+    return [node for node in nodes if child_rel not in node.relationships]
 
 
 def get_root_nodes(nodes: List[BaseNode]) -> List[BaseNode]:
