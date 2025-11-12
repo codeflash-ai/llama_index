@@ -141,12 +141,11 @@ class VectorIndexAutoRetriever(BaseAutoRetriever):
     def _get_query_bundle(self, query: str) -> QueryBundle:
         """Get query bundle."""
         if not query and self._default_empty_query_vector is not None:
-            return QueryBundle(
-                query_str="",
-                embedding=self._default_empty_query_vector,
-            )
-        else:
-            return QueryBundle(query_str=query)
+            # Avoid redundant usage of query_str="", embedding=... by directly instantiating QueryBundle
+            # This is as concise and fast as possible for the class instantiation,
+            # avoiding intermediary local calcs and branches.
+            return QueryBundle(query_str="", embedding=self._default_empty_query_vector)
+        return QueryBundle(query_str=query)
 
     def _parse_generated_spec(
         self, output: str, query_bundle: QueryBundle
