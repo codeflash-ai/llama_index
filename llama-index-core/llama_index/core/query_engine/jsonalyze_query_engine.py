@@ -254,6 +254,12 @@ class JSONalyzeQueryEngine(BaseQueryEngine):
         self._table_name = table_name
         self._verbose = verbose
 
+
+        self._prompts_dict: Dict[str, Any] = {
+            "jsonalyze_prompt": self._jsonalyze_prompt,
+            "response_synthesis_prompt": self._response_synthesis_prompt,
+        }
+
         super().__init__(
             callback_manager=callback_manager_from_settings_or_context(
                 Settings, service_context
@@ -262,10 +268,8 @@ class JSONalyzeQueryEngine(BaseQueryEngine):
 
     def _get_prompts(self) -> Dict[str, Any]:
         """Get prompts."""
-        return {
-            "jsonalyze_prompt": self._jsonalyze_prompt,
-            "response_synthesis_prompt": self._response_synthesis_prompt,
-        }
+        # Use cached prompt dictionary for improved performance
+        return self._prompts_dict
 
     def _update_prompts(self, prompts: PromptDictType) -> None:
         """Update prompts."""
