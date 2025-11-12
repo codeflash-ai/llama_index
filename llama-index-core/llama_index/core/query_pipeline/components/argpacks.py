@@ -96,9 +96,11 @@ class KwargPackComponent(QueryComponent):
 
     def _run_component(self, **kwargs: Any) -> Any:
         """Run component."""
-        if self.convert_fn is not None:
-            for k, v in kwargs.items():
-                kwargs[k] = self.convert_fn(v)
+        convert_fn = self.convert_fn
+        if convert_fn is not None:
+            # Efficient in-place update using a local reference and .items() view
+            for k in kwargs:
+                kwargs[k] = convert_fn(kwargs[k])
         return {"output": kwargs}
 
     async def _arun_component(self, **kwargs: Any) -> Any:
