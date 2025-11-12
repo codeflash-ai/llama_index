@@ -120,12 +120,17 @@ class VectorIndexAutoRetriever(BaseAutoRetriever):
             raise ValueError("extra_filters cannot be OR condition")
         self._extra_filters = extra_filters or MetadataFilters(filters=[])
         self._kwargs = kwargs
+
         super().__init__(
             callback_manager=callback_manager,
             object_map=object_map or self._index._object_map,
             objects=objects,
             verbose=verbose,
         )
+
+        # Cache expensive serialization operations
+        self._info_str = self._vector_store_info.json(indent=4)
+        self._schema_str = VectorStoreQuerySpec.schema_json(indent=4)
 
     def _get_prompts(self) -> PromptDictType:
         """Get prompts."""
@@ -188,15 +193,12 @@ class VectorIndexAutoRetriever(BaseAutoRetriever):
     async def agenerate_retrieval_spec(
         self, query_bundle: QueryBundle, **kwargs: Any
     ) -> BaseModel:
-        # prepare input
-        info_str = self._vector_store_info.json(indent=4)
-        schema_str = VectorStoreQuerySpec.schema_json(indent=4)
 
         # call LLM
         output = await self._llm.apredict(
             self._prompt,
-            schema_str=schema_str,
-            info_str=info_str,
+            schema_str=self._schema_str,
+            info_str=self._info_str,
             query_str=query_bundle.query_str,
         )
 
