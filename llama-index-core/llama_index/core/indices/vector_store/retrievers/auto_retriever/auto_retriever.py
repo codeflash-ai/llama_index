@@ -35,6 +35,7 @@ from llama_index.core.vector_stores.types import (
     VectorStoreQueryMode,
     VectorStoreQuerySpec,
 )
+from functools import lru_cache
 
 _logger = logging.getLogger(__name__)
 
@@ -172,7 +173,9 @@ class VectorIndexAutoRetriever(BaseAutoRetriever):
     ) -> BaseModel:
         # prepare input
         info_str = self._vector_store_info.json(indent=4)
-        schema_str = VectorStoreQuerySpec.schema_json(indent=4)
+        schema_str = self._cached_schema_json(4)
+
+        # call LLM
 
         # call LLM
         output = self._llm.predict(
@@ -254,3 +257,9 @@ class VectorIndexAutoRetriever(BaseAutoRetriever):
             ),
             new_query_bundle,
         )
+
+
+    @staticmethod
+    @lru_cache(maxsize=8)
+    def _cached_schema_json(indent: int) -> str:
+        return VectorStoreQuerySpec.schema_json(indent=indent)
