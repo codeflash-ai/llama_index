@@ -78,7 +78,9 @@ class ReActAgent(BaseAgent):
         if len(tools) > 0 and tool_retriever is not None:
             raise ValueError("Cannot specify both tools and tool_retriever")
         elif len(tools) > 0:
-            self._get_tools = lambda _: tools
+            # Cache adapted tools only once for the static tools case
+            self._adapted_tools = [adapt_to_async_tool(t) for t in tools]
+            self._get_tools = lambda _: self._adapted_tools
         elif tool_retriever is not None:
             tool_retriever_c = cast(ObjectRetriever[BaseTool], tool_retriever)
             self._get_tools = lambda message: tool_retriever_c.retrieve(message)
@@ -524,4 +526,5 @@ class ReActAgent(BaseAgent):
 
     def get_tools(self, message: str) -> List[AsyncBaseTool]:
         """Get tools."""
-        return [adapt_to_async_tool(t) for t in self._get_tools(message)]
+        # In static tools mode, adaptation is already cached in __init__
+        return self._get_tools(message)
