@@ -106,15 +106,26 @@ class HTMLNodeParser(NodeParser):
     def _extract_text_from_tag(self, tag: "Tag") -> str:
         from bs4 import NavigableString
 
+        # Convert self.tags to a set for O(1) lookup during iteration (critical optimization)
+        tag_set = set(self.tags)
+
         texts = []
+        # bs4.element.Tag.children is a generator; 
+        # to avoid repeated isinstance/name lookups, pre-bind methods
+        append = texts.append
+        strip = str.strip
+
         for elem in tag.children:
             if isinstance(elem, NavigableString):
-                if elem.strip():
-                    texts.append(elem.strip())
-            elif elem.name in self.tags:
+                stripped = strip(elem)
+                if stripped:
+                    append(stripped)
+            elif getattr(elem, "name", None) in tag_set:
                 continue
             else:
-                texts.append(elem.get_text().strip())
+                text = elem.get_text()
+                stripped = strip(text)
+                append(stripped)
         return "\n".join(texts)
 
     def _build_node_from_split(
