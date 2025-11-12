@@ -42,22 +42,19 @@ def get_root_nodes(nodes: List[BaseNode]) -> List[BaseNode]:
 
 def get_child_nodes(nodes: List[BaseNode], all_nodes: List[BaseNode]) -> List[BaseNode]:
     """Get child nodes of nodes from given all_nodes."""
-    children_ids = []
+    children_ids = set()
     for node in nodes:
         if NodeRelationship.CHILD not in node.relationships:
             continue
 
-        children_ids.extend(
-            [r.node_id for r in node.relationships[NodeRelationship.CHILD]]
+        children_ids.update(
+            r.node_id for r in node.relationships[NodeRelationship.CHILD]
         )
 
-    child_nodes = []
-    for candidate_node in all_nodes:
-        if candidate_node.node_id not in children_ids:
-            continue
-        child_nodes.append(candidate_node)
+    if not children_ids:
+        return []
 
-    return child_nodes
+    return [candidate_node for candidate_node in all_nodes if candidate_node.node_id in children_ids]
 
 
 def get_deeper_nodes(nodes: List[BaseNode], depth: int = 1) -> List[BaseNode]:
