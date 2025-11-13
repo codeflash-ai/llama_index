@@ -151,11 +151,13 @@ class FLAREInstructQueryEngine(BaseQueryEngine):
         self._max_lookahead_query_tasks = max_lookahead_query_tasks
         self._verbose = verbose
 
+
+        # Cache prompts dictionary for efficient repeated _get_prompts calls
+        self._prompts_cache: Dict[str, Any] = {"instruct_prompt": self._instruct_prompt}
+
     def _get_prompts(self) -> Dict[str, Any]:
         """Get prompts."""
-        return {
-            "instruct_prompt": self._instruct_prompt,
-        }
+        return self._prompts_cache
 
     def _update_prompts(self, prompts: PromptDictType) -> None:
         """Update prompts."""
