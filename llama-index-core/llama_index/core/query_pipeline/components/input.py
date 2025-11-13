@@ -37,7 +37,7 @@ class InputComponent(QueryComponent):
 
     async def _arun_component(self, **kwargs: Any) -> Any:
         """Run component (async)."""
-        return self._run_component(**kwargs)
+        return kwargs
 
     @property
     def input_keys(self) -> InputKeys:
