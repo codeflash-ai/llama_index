@@ -138,15 +138,12 @@ class RecursiveRetriever(BaseRetriever):
 
     def _get_object(self, query_id: str) -> RQN_TYPE:
         """Fetch retriever or query engine."""
-        node = self._node_dict.get(query_id, None)
-        if node is not None:
-            return node
-        retriever = self._retriever_dict.get(query_id, None)
-        if retriever is not None:
-            return retriever
-        query_engine = self._query_engine_dict.get(query_id, None)
-        if query_engine is not None:
-            return query_engine
+        if query_id in self._node_dict:
+            return self._node_dict[query_id]
+        if query_id in self._retriever_dict:
+            return self._retriever_dict[query_id]
+        if query_id in self._query_engine_dict:
+            return self._query_engine_dict[query_id]
         raise ValueError(
             f"Query id {query_id} not found in either `retriever_dict` "
             "or `query_engine_dict`."
