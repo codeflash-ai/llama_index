@@ -46,7 +46,8 @@ class ObjectRetriever(ChainableMixin, Generic[OT]):
 
     def retrieve(self, str_or_query_bundle: QueryType) -> List[OT]:
         nodes = self._retriever.retrieve(str_or_query_bundle)
-        return [self._object_node_mapping.from_node(node.node) for node in nodes]
+        from_node = self._object_node_mapping.from_node
+        return [from_node(node.node) for node in nodes]
 
     async def aretrieve(self, str_or_query_bundle: QueryType) -> List[OT]:
         nodes = await self._retriever.aretrieve(str_or_query_bundle)
