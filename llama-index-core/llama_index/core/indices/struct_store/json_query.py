@@ -5,7 +5,7 @@ from typing import Any, Callable, Dict, List, Optional, Union
 from llama_index.core.base.base_query_engine import BaseQueryEngine
 from llama_index.core.base.response.schema import Response
 from llama_index.core.llms.llm import LLM
-from llama_index.core.prompts import BasePromptTemplate, PromptTemplate
+from llama_index.core.prompts import PromptType, BasePromptTemplate, PromptTemplate
 from llama_index.core.prompts.default_prompts import DEFAULT_JSON_PATH_PROMPT
 from llama_index.core.prompts.mixin import PromptDictType, PromptMixinType
 from llama_index.core.prompts.prompt_type import PromptType
@@ -18,10 +18,12 @@ from llama_index.core.settings import (
 )
 from llama_index.core.utils import print_text
 
+jsonpath_parse = None
+
+DatumInContext = None
+
 logger = logging.getLogger(__name__)
-IMPORT_ERROR_MSG = (
-    "`jsonpath_ng` package not found, please run `pip install jsonpath-ng`"
-)
+IMPORT_ERROR_MSG = "`jsonpath_ng` package not found, please run `pip install jsonpath-ng`"
 
 JSONType = Union[Dict[str, "JSONType"], List["JSONType"], str, int, float, bool, None]
 
@@ -105,6 +107,7 @@ class JSONQueryEngine(BaseQueryEngine):
         """Initialize params."""
         self._json_value = json_value
         self._json_schema = json_schema
+        self._json_schema_str = json.dumps(json_schema)
         self._llm = llm or llm_from_settings_or_context(Settings, service_context)
         self._json_path_prompt = json_path_prompt or DEFAULT_JSON_PATH_PROMPT
         self._output_processor = output_processor or default_output_processor
@@ -141,7 +144,8 @@ class JSONQueryEngine(BaseQueryEngine):
 
     def _get_schema_context(self) -> str:
         """Get JSON schema context."""
-        return json.dumps(self._json_schema)
+        # Use cached serialized schema
+        return self._json_schema_str
 
     def _query(self, query_bundle: QueryBundle) -> Response:
         """Answer a query."""
