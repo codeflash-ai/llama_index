@@ -169,8 +169,8 @@ class QueryPipeline(QueryComponent):
     def __init__(
         self,
         callback_manager: Optional[CallbackManager] = None,
-        chain: Optional[Sequence[CHAIN_COMPONENT_TYPE]] = None,
-        modules: Optional[Dict[str, QUERY_COMPONENT_TYPE]] = None,
+        chain: Optional[Sequence['CHAIN_COMPONENT_TYPE']] = None,
+        modules: Optional[Dict[str, 'QUERY_COMPONENT_TYPE']] = None,
         links: Optional[List[Link]] = None,
         **kwargs: Any,
     ):
@@ -287,7 +287,13 @@ class QueryPipeline(QueryComponent):
     def _get_leaf_keys(self) -> List[str]:
         """Get leaf keys."""
         # get all modules without downstream dependencies
-        return [v for v, d in self.dag.out_degree() if d == 0]
+        # Optimized: process only nodes with no outgoing edges directly using dag.nodes and dag._succ
+        dag = self.dag
+        # For MultiDiGraph, dag._succ is the dict of node -> dict of successors
+        # This avoids unnecessary tuple construction of out_degree()
+        # Return nodes from dag.nodes where len(dag._succ[node]) == 0
+        # (Preserving return type List[str], so do list(...) conversion)
+        return [v for v in dag.nodes if not dag._succ[v]]
 
     def set_callback_manager(self, callback_manager: CallbackManager) -> None:
         """Set callback manager."""
