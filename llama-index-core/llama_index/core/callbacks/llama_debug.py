@@ -104,6 +104,9 @@ class LlamaDebugHandler(BaseCallbackHandler):
 
     def _get_event_pairs(self, events: List[CBEvent]) -> List[List[CBEvent]]:
         """Helper function to pair events according to their ID."""
+        if not events:
+            return []
+            
         event_pairs: Dict[str, List[CBEvent]] = defaultdict(list)
         for event in events:
             event_pairs[event.id_].append(event)
