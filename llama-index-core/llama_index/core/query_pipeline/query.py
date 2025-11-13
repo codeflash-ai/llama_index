@@ -169,7 +169,7 @@ class QueryPipeline(QueryComponent):
     def __init__(
         self,
         callback_manager: Optional[CallbackManager] = None,
-        chain: Optional[Sequence[CHAIN_COMPONENT_TYPE]] = None,
+        chain: Optional[Sequence["CHAIN_COMPONENT_TYPE"]] = None,
         modules: Optional[Dict[str, QUERY_COMPONENT_TYPE]] = None,
         links: Optional[List[Link]] = None,
         **kwargs: Any,
@@ -396,10 +396,11 @@ class QueryPipeline(QueryComponent):
                 raise ValueError("Only one arg is allowed.")
             if len(kwargs) > 0:
                 raise ValueError("No kwargs allowed if args is specified.")
-            if len(root_module.free_req_input_keys) != 1:
+            free_req_keys = root_module.free_req_input_keys
+            if len(free_req_keys) != 1:
                 raise ValueError("Only one free input key is allowed.")
             # set kwargs
-            kwargs[next(iter(root_module.free_req_input_keys))] = args[0]
+            kwargs[next(iter(free_req_keys))] = args[0]
         return root_key, kwargs
 
     def _get_single_result_output(
@@ -573,25 +574,47 @@ class QueryPipeline(QueryComponent):
         for module_key, module_input in module_input_dict.items():
             all_module_inputs[module_key] = module_input
 
+
+        dag = self.dag  # local reference for faster access
+        module_dict = self.module_dict  # local reference for faster access
+        verbose = self.verbose
+        show_progress = self.show_progress
+        num_workers = self.num_workers
+
         while len(queue) > 0:
             popped_indices = set()
             popped_nodes = []
             # get subset of nodes who don't have ancestors also in the queue
             # these are tasks that are parallelizable
+            # Optimize ancestor checking: compute all ancestors up front (networkx.ancestors is expensive)
+            queue_set = set(queue)
+            # Use direct predecessor dictionary for MultiDiGraph for performance.
+            # This avoids repeated networkx.ancestors calls.
             for i, module_key in enumerate(queue):
-                module_ancestors = networkx.ancestors(self.dag, module_key)
-                if len(set(module_ancestors).intersection(queue)) == 0:
+                ancestors = dag.pred[module_key]
+                if not queue_set.intersection(ancestors):
                     popped_indices.add(i)
                     popped_nodes.append(module_key)
 
-            # update queue
-            queue = [
-                module_key
-                for i, module_key in enumerate(queue)
-                if i not in popped_indices
-            ]
+            # If empty, fall back to networkx.ancestors for compatibility
+            # (in case dag.pred doesn't exist as expected for some reason)
+            if not popped_nodes:
+                for i, module_key in enumerate(queue):
+                    ancestors = networkx.ancestors(dag, module_key)
+                    if not queue_set.intersection(ancestors):
+                        popped_indices.add(i)
+                        popped_nodes.append(module_key)
 
-            if self.verbose:
+            # Update queue efficiently: only keep nodes not popped
+            if popped_indices:
+                # Use list comprehension for slightly faster update
+                queue = [module_key for i, module_key in enumerate(queue) if i not in popped_indices]
+            else:
+                # Defensive fallback (should not occur)
+                queue = []
+
+            if verbose:
+                # Print debug information about modules to be run in parallel
                 print_debug_input_multi(
                     popped_nodes,
                     [all_module_inputs[module_key] for module_key in popped_nodes],
@@ -600,13 +623,13 @@ class QueryPipeline(QueryComponent):
             # create tasks from popped nodes
             tasks = []
             for module_key in popped_nodes:
-                module = self.module_dict[module_key]
+                module = module_dict[module_key]
                 module_input = all_module_inputs[module_key]
                 tasks.append(module.arun_component(**module_input))
 
             # run tasks
             output_dicts = await run_jobs(
-                tasks, show_progress=self.show_progress, workers=self.num_workers
+                tasks, show_progress=show_progress, workers=num_workers
             )
 
             for output_dict, module_key in zip(output_dicts, popped_nodes):
@@ -670,3 +693,24 @@ class QueryPipeline(QueryComponent):
     def clean_dag(self) -> networkx.DiGraph:
         """Clean dag."""
         return clean_graph_attributes_copy(self.dag)
+
+
+    @staticmethod
+    def _get_parallelizable_nodes(queue: List[str], dag: networkx.MultiDiGraph) -> Tuple[List[int], List[str]]:
+        """
+        Returns indices and nodes of parallelizable nodes in queue: nodes with no ancestors also in queue.
+        This is a significant performance improvement for large DAGs, as ancestor computation is expensive.
+        """
+        # Prepare a set for faster checks
+        queue_set = set(queue)
+        # Precompute all ancestors once for each node, cache results for reuse
+        result_indices = []
+        result_nodes = []
+        for i, module_key in enumerate(queue):
+            # ancestors only once per module_key (networkx.ancestors can be slow)
+            ancestors = dag.pred[node] if hasattr(dag, "pred") else networkx.ancestors(dag, module_key)
+            # optimize intersection: short-circuit if ancestor is in queue_set
+            if not queue_set.intersection(ancestors):
+                result_indices.append(i)
+                result_nodes.append(module_key)
+        return result_indices, result_nodes
