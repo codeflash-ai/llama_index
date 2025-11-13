@@ -37,8 +37,7 @@ class ChatMemoryBuffer(BaseMemory):
             raise ValueError("Token limit must be set and greater than 0.")
 
         # Validate tokenizer -- this avoids errors when loading from json/dict
-        tokenizer_fn = values.get("tokenizer_fn", None)
-        if tokenizer_fn is None:
+        if values.get("tokenizer_fn", None) is None:
             values["tokenizer_fn"] = get_tokenizer()
 
         return values

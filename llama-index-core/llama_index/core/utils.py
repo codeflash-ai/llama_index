@@ -12,21 +12,11 @@ from dataclasses import dataclass
 from functools import partial, wraps
 from itertools import islice
 from pathlib import Path
-from typing import (
-    Any,
-    AsyncGenerator,
-    Callable,
-    Dict,
-    Generator,
-    Iterable,
-    List,
-    Optional,
-    Protocol,
-    Set,
-    Type,
-    Union,
-    runtime_checkable,
-)
+from typing import (Any, AsyncGenerator, Callable, Dict, Generator, Iterable,
+                    List, Optional, Protocol, Set, Type, Union,
+                    runtime_checkable)
+
+import llama_index.core
 
 
 class GlobalsHelper:
@@ -106,9 +96,8 @@ def set_global_tokenizer(tokenizer: Union[Tokenizer, Callable[[str], list]]) -> 
 
 
 def get_tokenizer() -> Callable[[str], List]:
-    import llama_index.core
-
-    if llama_index.core.global_tokenizer is None:
+    global_tokenizer = llama_index.core.global_tokenizer
+    if global_tokenizer is None:
         tiktoken_import_err = (
             "`tiktoken` package not found, please run `pip install tiktoken`"
         )
@@ -133,8 +122,10 @@ def get_tokenizer() -> Callable[[str], List]:
         if should_revert:
             del os.environ["TIKTOKEN_CACHE_DIR"]
 
-    assert llama_index.core.global_tokenizer is not None
-    return llama_index.core.global_tokenizer
+        global_tokenizer = llama_index.core.global_tokenizer
+
+    assert global_tokenizer is not None
+    return global_tokenizer
 
 
 def get_new_id(d: Set) -> str:
