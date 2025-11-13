@@ -169,8 +169,8 @@ class QueryPipeline(QueryComponent):
     def __init__(
         self,
         callback_manager: Optional[CallbackManager] = None,
-        chain: Optional[Sequence[CHAIN_COMPONENT_TYPE]] = None,
-        modules: Optional[Dict[str, QUERY_COMPONENT_TYPE]] = None,
+        chain: Optional[Sequence['CHAIN_COMPONENT_TYPE']] = None,
+        modules: Optional[Dict[str, 'QUERY_COMPONENT_TYPE']] = None,
         links: Optional[List[Link]] = None,
         **kwargs: Any,
     ):
@@ -287,7 +287,9 @@ class QueryPipeline(QueryComponent):
     def _get_leaf_keys(self) -> List[str]:
         """Get leaf keys."""
         # get all modules without downstream dependencies
-        return [v for v, d in self.dag.out_degree() if d == 0]
+        # Optimize by using dag.succ directly for O(n) traversal
+        dag = self.dag
+        return [node for node, succ in dag.succ.items() if not succ]
 
     def set_callback_manager(self, callback_manager: CallbackManager) -> None:
         """Set callback manager."""
