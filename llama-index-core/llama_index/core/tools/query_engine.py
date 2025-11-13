@@ -42,15 +42,16 @@ class QueryEngineTool(AsyncBaseTool):
         description: Optional[str] = None,
         resolve_input_errors: bool = True,
     ) -> "QueryEngineTool":
-        name = name or DEFAULT_NAME
-        description = description or DEFAULT_DESCRIPTION
+        # Avoid OR on every call: short-circuit with explicit check
+        if name is None:
+            name = DEFAULT_NAME
+        if description is None:
+            description = DEFAULT_DESCRIPTION
+
 
         metadata = ToolMetadata(name=name, description=description)
-        return cls(
-            query_engine=query_engine,
-            metadata=metadata,
-            resolve_input_errors=resolve_input_errors,
-        )
+        # Avoid keyword argument packing for minor speedup
+        return cls(query_engine, metadata, resolve_input_errors)
 
     @property
     def query_engine(self) -> BaseQueryEngine:
