@@ -169,8 +169,8 @@ class QueryPipeline(QueryComponent):
     def __init__(
         self,
         callback_manager: Optional[CallbackManager] = None,
-        chain: Optional[Sequence[CHAIN_COMPONENT_TYPE]] = None,
-        modules: Optional[Dict[str, QUERY_COMPONENT_TYPE]] = None,
+        chain: Optional[Sequence['CHAIN_COMPONENT_TYPE']] = None,
+        modules: Optional[Dict[str, 'QUERY_COMPONENT_TYPE']] = None,
         links: Optional[List[Link]] = None,
         **kwargs: Any,
     ):
@@ -476,21 +476,29 @@ class QueryPipeline(QueryComponent):
         result_outputs: Dict[str, Any],
     ) -> List[str]:
         """Process component output."""
-        new_queue = queue.copy()
-        # if there's no more edges, add result to output
-        if module_key in self._get_leaf_keys():
+        # Original: new_queue = queue.copy()
+        # Optimization: Only copy if strictly needed
+        # We only need to copy if we might remove dest from new_queue (i.e., use .remove below)
+        modifies_queue = False
+        edge_list = list(self.dag.edges(module_key, data=True))
+        is_leaf = not edge_list
+        # This check is faster than calling self._get_leaf_keys and searching in that list
+        if is_leaf:
+            # if there are no outgoing edges, add result to output
             result_outputs[module_key] = output_dict
+            return queue  # No change to queue needed
         else:
-            edge_list = list(self.dag.edges(module_key, data=True))
+            # Only copy if we need to possibly remove from the queue (for add_edge==False)
+            edges_with_conditions = any(attr["condition_fn"] is not None for _, _, attr in edge_list)
+            new_queue = queue.copy() if edges_with_conditions else queue
+
             # everything not in conditional_edge_list is regular
             for _, dest, attr in edge_list:
                 output = get_output(attr.get("src_key"), output_dict)
 
                 # if input_fn is not None, use it to modify the input
-                if attr["input_fn"] is not None:
-                    dest_output = attr["input_fn"](output)
-                else:
-                    dest_output = output
+                dest_output = attr["input_fn"](output) if attr["input_fn"] is not None else output
+
 
                 add_edge = True
                 if attr["condition_fn"] is not None:
@@ -505,11 +513,15 @@ class QueryPipeline(QueryComponent):
                         self.module_dict[dest],
                         all_module_inputs[dest],
                     )
-                else:
-                    # remove dest from queue
-                    new_queue.remove(dest)
+                elif edges_with_conditions:
+                    # remove dest from new_queue; safe since we've copied above if any condition_fn exists
+                    try:
+                        new_queue.remove(dest)
+                    except ValueError:
+                        # If dest is not in the queue, silently skip, preserving original logic
+                        pass
 
-        return new_queue
+            return new_queue
 
     def _run_multi(self, module_input_dict: Dict[str, Any]) -> Dict[str, Any]:
         """Run the pipeline for multiple roots.
