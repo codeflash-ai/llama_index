@@ -108,10 +108,16 @@ class LlamaDebugHandler(BaseCallbackHandler):
         for event in events:
             event_pairs[event.id_].append(event)
 
-        return sorted(
-            event_pairs.values(),
-            key=lambda x: datetime.strptime(x[0].time, TIMESTAMP_FORMAT),
-        )
+        if not event_pairs:
+            return []
+
+        event_list = list(event_pairs.values())
+        events_with_dt = [
+            (datetime.strptime(group[0].time, TIMESTAMP_FORMAT), group)
+            for group in event_list
+        ]
+        events_with_dt.sort(key=lambda x: x[0])
+        return [group for _, group in events_with_dt]
 
     def _get_time_stats_from_event_pairs(
         self, event_pairs: List[List[CBEvent]]
