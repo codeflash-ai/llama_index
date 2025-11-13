@@ -169,8 +169,8 @@ class QueryPipeline(QueryComponent):
     def __init__(
         self,
         callback_manager: Optional[CallbackManager] = None,
-        chain: Optional[Sequence[CHAIN_COMPONENT_TYPE]] = None,
-        modules: Optional[Dict[str, QUERY_COMPONENT_TYPE]] = None,
+        chain: Optional[Sequence['CHAIN_COMPONENT_TYPE']] = None,
+        modules: Optional[Dict[str, 'QUERY_COMPONENT_TYPE']] = None,
         links: Optional[List[Link]] = None,
         **kwargs: Any,
     ):
@@ -292,9 +292,14 @@ class QueryPipeline(QueryComponent):
     def set_callback_manager(self, callback_manager: CallbackManager) -> None:
         """Set callback manager."""
         # go through every module in module dict and set callback manager
+        # Only propagate if not already identical (optimization for repeated calls).
+        if self.callback_manager is callback_manager:
+            return
         self.callback_manager = callback_manager
         for module in self.module_dict.values():
-            module.set_callback_manager(callback_manager)
+            # Only propagate if not already identical.
+            if getattr(module, 'callback_manager', None) is not callback_manager:
+                module.set_callback_manager(callback_manager)
 
     def run(
         self,
@@ -304,9 +309,9 @@ class QueryPipeline(QueryComponent):
         **kwargs: Any,
     ) -> Any:
         """Run the pipeline."""
-        # first set callback manager
-        callback_manager = callback_manager or self.callback_manager
-        self.set_callback_manager(callback_manager)
+        # Only update callback_manager if it is provided and not the same as self.callback_manager
+        if callback_manager is not None and callback_manager is not self.callback_manager:
+            self.set_callback_manager(callback_manager)
         with self.callback_manager.as_trace("query"):
             # try to get query payload
             try:
