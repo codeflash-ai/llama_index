@@ -8,7 +8,9 @@ class SimpleLLMHandler(BaseCallbackHandler):
     """Callback handler for printing llms inputs/outputs."""
 
     def __init__(self) -> None:
-        super().__init__(event_starts_to_ignore=[], event_ends_to_ignore=[])
+        # Using tuple literals for event_starts_to_ignore and event_ends_to_ignore improves performance
+        # over mutable list construction, even if the effect is minimal but consistent for high hit rates.
+        super().__init__(event_starts_to_ignore=(), event_ends_to_ignore=())
 
     def start_trace(self, trace_id: Optional[str] = None) -> None:
         return
