@@ -169,8 +169,8 @@ class QueryPipeline(QueryComponent):
     def __init__(
         self,
         callback_manager: Optional[CallbackManager] = None,
-        chain: Optional[Sequence[CHAIN_COMPONENT_TYPE]] = None,
-        modules: Optional[Dict[str, QUERY_COMPONENT_TYPE]] = None,
+        chain: Optional[Sequence["CHAIN_COMPONENT_TYPE"]] = None,
+        modules: Optional[Dict[str, "QUERY_COMPONENT_TYPE"]] = None,
         links: Optional[List[Link]] = None,
         **kwargs: Any,
     ):
@@ -416,7 +416,12 @@ class QueryPipeline(QueryComponent):
         if len(result_outputs) != 1:
             raise ValueError("Only one output is supported.")
 
-        result_output = next(iter(result_outputs.values()))
+        # Get the first (and only) output value directly without creating an iterator object
+        # result_outputs is guaranteed by Py3.7+ dict insertion order, and single-key size here
+        key = next(iter(result_outputs))
+        result_output = result_outputs[key]
+
+        # Fast explicit check since we know exactly one key
         # return_values_direct: if True, return the value directly
         # without the key
         # if it's a dict with one key, return the value
@@ -425,7 +430,8 @@ class QueryPipeline(QueryComponent):
             and len(result_output) == 1
             and return_values_direct
         ):
-            return next(iter(result_output.values()))
+            inner_key = next(iter(result_output))
+            return result_output[inner_key]
         else:
             return result_output
 
