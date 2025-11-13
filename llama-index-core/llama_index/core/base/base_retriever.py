@@ -45,8 +45,7 @@ class BaseRetriever(ChainableMixin, PromptMixin):
 
         if objects is not None:
             object_map = {obj.index_id: obj.obj for obj in objects}
-
-        self.object_map = object_map or {}
+        self.object_map = object_map if object_map is not None else {}
         self._verbose = verbose
 
     def _check_callback_manager(self) -> None:
