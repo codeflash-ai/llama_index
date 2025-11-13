@@ -36,16 +36,17 @@ def action_input_parser(json_str: str) -> dict:
 
 
 def extract_final_response(input_text: str) -> Tuple[str, str]:
-    pattern = r"\s*Thought:(.*?)Answer:(.*?)(?:$)"
+    thought_marker = 'Thought:'
+    answer_marker = 'Answer:'
 
-    match = re.search(pattern, input_text, re.DOTALL)
-    if not match:
+    thought_start = input_text.find(thought_marker)
+    answer_start = input_text.find(answer_marker)
+    if thought_start == -1 or answer_start == -1 or thought_start > answer_start:
         raise ValueError(
             f"Could not extract final answer from input text: {input_text}"
         )
-
-    thought = match.group(1).strip()
-    answer = match.group(2).strip()
+    thought = input_text[thought_start + len(thought_marker):answer_start].strip()
+    answer = input_text[answer_start + len(answer_marker):].strip()
     return thought, answer
 
 
