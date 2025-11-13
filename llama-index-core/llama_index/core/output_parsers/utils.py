@@ -8,6 +8,8 @@ with contextlib.suppress(ImportError):
 
 from llama_index.core.output_parsers.base import OutputParserException
 
+_CODE_MARKDOWN_PATTERN = re.compile(r"```(.*?)```", re.DOTALL)
+
 
 def _marshal_llm_to_json(output: str) -> str:
     """
@@ -62,11 +64,9 @@ def parse_json_markdown(text: str) -> Any:
 
 
 def parse_code_markdown(text: str, only_last: bool) -> List[str]:
-    # Regular expression pattern to match code within triple-backticks
-    pattern = r"```(.*?)```"
+    matches = _CODE_MARKDOWN_PATTERN.findall(text)
 
-    # Find all matches of the pattern in the text
-    matches = re.findall(pattern, text, re.DOTALL)
+    # Return the last matched group if requested
 
     # Return the last matched group if requested
     code = matches[-1] if matches and only_last else matches
@@ -81,14 +81,12 @@ def parse_code_markdown(text: str, only_last: bool) -> List[str]:
 
         candidate = text.strip()
 
-        if candidate.startswith('"') and candidate.endswith('"'):
-            candidate = candidate[1:-1]
+        # Remove surrounding quotes/backticks in a loop for efficiency
+        for quote in ('"', "'", "`"):
+            if candidate.startswith(quote) and candidate.endswith(quote):
+                candidate = candidate[1:-1]
 
-        if candidate.startswith("'") and candidate.endswith("'"):
-            candidate = candidate[1:-1]
-
-        if candidate.startswith("`") and candidate.endswith("`"):
-            candidate = candidate[1:-1]
+        # For triple backticks, handle start and end
 
         # For triple backticks we split the handling of the start and end
         # partly because there can be cases where only one and not the other
