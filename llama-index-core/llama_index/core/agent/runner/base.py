@@ -133,14 +133,13 @@ def validate_step_from_args(
     task_id: str, input: Optional[str] = None, step: Optional[Any] = None, **kwargs: Any
 ) -> Optional[TaskStep]:
     """Validate step from args."""
-    if step is not None:
-        if input is not None:
-            raise ValueError("Cannot specify both `step` and `input`")
-        if not isinstance(step, TaskStep):
-            raise ValueError(f"step must be TaskStep: {step}")
-        return step
-    else:
+    if step is None:
         return None
+    if input is not None:
+        raise ValueError("Cannot specify both `step` and `input`")
+    if type(step) is not TaskStep:
+        raise ValueError(f"step must be TaskStep: {step}")
+    return step
 
 
 class TaskState(BaseModel):
