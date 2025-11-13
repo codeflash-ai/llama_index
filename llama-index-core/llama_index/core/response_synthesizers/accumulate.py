@@ -73,15 +73,38 @@ class Accumulate(BaseSynthesizer):
         if self._streaming:
             raise ValueError("Unable to stream in Accumulate response mode")
 
-        tasks = [
-            self._give_responses(
-                query_str, text_chunk, use_async=True, **response_kwargs
-            )
-            for text_chunk in text_chunks
-        ]
+        # Launch all LLM calls concurrently per text chunk (and per packed chunk)
+        tasks: List[asyncio.Task] = []
+        text_qa_template = self._text_qa_template.partial_format(query_str=query_str)
+        for text_chunk in text_chunks:
+            # Do repack for each chunk once only (minimizing repeated work)
+            repacked_chunks = self._prompt_helper.repack(text_qa_template, [text_chunk])
+            if self._output_cls is None:
+                for cur_text_chunk in repacked_chunks:
+                    tasks.append(
+                        asyncio.create_task(
+                            self._llm.apredict(
+                                text_qa_template,
+                                context_str=cur_text_chunk,
+                                **response_kwargs,
+                            )
+                        )
+                    )
+            else:
+                for cur_text_chunk in repacked_chunks:
+                    tasks.append(
+                        asyncio.create_task(
+                            self._llm.astructured_predict(
+                                self._output_cls,
+                                text_qa_template,
+                                context_str=cur_text_chunk,
+                                **response_kwargs,
+                            )
+                        )
+                    )
 
-        flattened_tasks = self.flatten_list(tasks)
-        outputs = await asyncio.gather(*flattened_tasks)
+        outputs = await asyncio.gather(*tasks)
+
 
         return self._format_response(outputs, separator)
 
