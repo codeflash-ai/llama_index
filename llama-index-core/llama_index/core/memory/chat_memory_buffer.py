@@ -152,5 +152,8 @@ class ChatMemoryBuffer(BaseMemory):
             return 0
 
         chat_history = self.get_all()
-        msg_str = " ".join(str(m.content) for m in chat_history[-message_count:])
+        relevant_history = chat_history[-message_count:]
+        if not relevant_history:
+            return 0
+        msg_str = " ".join(str(m.content) for m in relevant_history)
         return len(self.tokenizer_fn(msg_str))
