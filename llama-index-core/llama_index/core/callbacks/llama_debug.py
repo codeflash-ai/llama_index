@@ -108,10 +108,9 @@ class LlamaDebugHandler(BaseCallbackHandler):
         for event in events:
             event_pairs[event.id_].append(event)
 
-        return sorted(
-            event_pairs.values(),
-            key=lambda x: datetime.strptime(x[0].time, TIMESTAMP_FORMAT),
-        )
+        event_groups = list(event_pairs.values())
+        event_groups.sort(key=lambda x: datetime.strptime(x[0].time, TIMESTAMP_FORMAT))
+        return event_groups
 
     def _get_time_stats_from_event_pairs(
         self, event_pairs: List[List[CBEvent]]
@@ -140,7 +139,11 @@ class LlamaDebugHandler(BaseCallbackHandler):
 
     def get_llm_inputs_outputs(self) -> List[List[CBEvent]]:
         """Get the exact LLM inputs and outputs."""
-        return self._get_event_pairs(self._event_pairs_by_type[CBEventType.LLM])
+        # Use local variable for faster attribute lookup
+        llm_events = self._event_pairs_by_type.get(CBEventType.LLM)
+        if not llm_events:
+            return []
+        return self._get_event_pairs(llm_events)
 
     def get_event_time_info(
         self, event_type: Optional[CBEventType] = None
