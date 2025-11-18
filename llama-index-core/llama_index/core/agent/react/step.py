@@ -88,21 +88,35 @@ class ReActAgentWorker(BaseAgentWorker):
         tool_retriever: Optional[ObjectRetriever[BaseTool]] = None,
     ) -> None:
         self._llm = llm
-        self.callback_manager = callback_manager or llm.callback_manager
+        self.callback_manager = callback_manager if callback_manager is not None else llm.callback_manager
         self._max_iterations = max_iterations
-        self._react_chat_formatter = react_chat_formatter or ReActChatFormatter()
-        self._output_parser = output_parser or ReActOutputParser()
+
+        # Cache default class singleton objects at class level
+        # (significantly speeds up instantiation for stateless classes)
+        cls = type(self)
+        if not hasattr(cls, "_react_chat_formatter_default"):
+            cls._react_chat_formatter_default = ReActChatFormatter()
+        if not hasattr(cls, "_output_parser_default"):
+            cls._output_parser_default = ReActOutputParser()
+
+        self._react_chat_formatter = react_chat_formatter if react_chat_formatter is not None else cls._react_chat_formatter_default
+        self._output_parser = output_parser if output_parser is not None else cls._output_parser_default
         self._verbose = verbose
 
-        if len(tools) > 0 and tool_retriever is not None:
+        tools_len = len(tools)
+        # Optimize truth checks
+        if tools_len > 0 and tool_retriever is not None:
             raise ValueError("Cannot specify both tools and tool_retriever")
-        elif len(tools) > 0:
-            self._get_tools = lambda _: tools
+        elif tools_len > 0:
+            # Avoid lambda allocations on every call using a closure
+            def get_tools(_: Any) -> Sequence[BaseTool]:
+                return tools
+            self._get_tools = get_tools
         elif tool_retriever is not None:
             tool_retriever_c = cast(ObjectRetriever[BaseTool], tool_retriever)
-            self._get_tools = lambda message: tool_retriever_c.retrieve(message)
+            self._get_tools = tool_retriever_c.retrieve
         else:
-            self._get_tools = lambda _: []
+            self._get_tools = lambda _: ()
 
     @classmethod
     def from_tools(
@@ -127,11 +141,11 @@ class ReActAgentWorker(BaseAgentWorker):
         Returns:
             ReActAgent
         """
-        llm = llm or Settings.llm
+        llm = llm if llm is not None else Settings.llm
         if callback_manager is not None:
             llm.callback_manager = callback_manager
         return cls(
-            tools=tools or [],
+            tools=tools if tools is not None else [],
             tool_retriever=tool_retriever,
             llm=llm,
             max_iterations=max_iterations,
