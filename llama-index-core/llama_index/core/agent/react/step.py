@@ -97,10 +97,13 @@ class ReActAgentWorker(BaseAgentWorker):
         if len(tools) > 0 and tool_retriever is not None:
             raise ValueError("Cannot specify both tools and tool_retriever")
         elif len(tools) > 0:
-            self._get_tools = lambda _: tools
+            # Pre-adapt tools to async at initialization for best performance.
+            self._async_tools = [adapt_to_async_tool(t) for t in tools]
+            self._get_tools = lambda _: self._async_tools
         elif tool_retriever is not None:
             tool_retriever_c = cast(ObjectRetriever[BaseTool], tool_retriever)
-            self._get_tools = lambda message: tool_retriever_c.retrieve(message)
+            # Dynamic retrieval; cannot pre-adapt, use efficient memoized adapter
+            self._get_tools = lambda message: [adapt_to_async_tool(t) for t in tool_retriever_c.retrieve(message)]
         else:
             self._get_tools = lambda _: []
 
@@ -178,7 +181,7 @@ class ReActAgentWorker(BaseAgentWorker):
 
     def get_tools(self, input: str) -> List[AsyncBaseTool]:
         """Get tools."""
-        return [adapt_to_async_tool(t) for t in self._get_tools(input)]
+        return self._get_tools(input)
 
     def _extract_reasoning_step(
         self, output: ChatResponse, is_streaming: bool = False
