@@ -128,9 +128,8 @@ class MultimodalReActAgentWorker(BaseAgentWorker):
         self._verbose = verbose
 
         try:
-            from llama_index.multi_modal_llms.openai.utils import (
-                generate_openai_multi_modal_chat_message,
-            )  # pants: no-infer-dep
+            from llama_index.multi_modal_llms.openai.utils import \
+                generate_openai_multi_modal_chat_message  # pants: no-infer-dep
 
             self._add_user_step_to_reasoning = partial(
                 add_user_step_to_reasoning,
@@ -145,12 +144,21 @@ class MultimodalReActAgentWorker(BaseAgentWorker):
         if len(tools) > 0 and tool_retriever is not None:
             raise ValueError("Cannot specify both tools and tool_retriever")
         elif len(tools) > 0:
-            self._get_tools = lambda _: tools
+            # memoize adapted tools for static case to avoid redundant adaptation
+            self._original_tools = list(tools)
+            self._async_tools = [adapt_to_async_tool(t) for t in self._original_tools]
+            self._get_tools = lambda _: self._original_tools
+            self._static_tools = True
         elif tool_retriever is not None:
             tool_retriever_c = cast(ObjectRetriever[BaseTool], tool_retriever)
             self._get_tools = lambda message: tool_retriever_c.retrieve(message)
+            self._static_tools = False
         else:
+            self._original_tools = []
+            self._async_tools = []
             self._get_tools = lambda _: []
+
+            self._static_tools = True
 
     @classmethod
     def from_tools(
@@ -228,6 +236,8 @@ class MultimodalReActAgentWorker(BaseAgentWorker):
 
     def get_tools(self, input: str) -> List[AsyncBaseTool]:
         """Get tools."""
+        if self._static_tools:
+            return self._async_tools
         return [adapt_to_async_tool(t) for t in self._get_tools(input)]
 
     def _extract_reasoning_step(
