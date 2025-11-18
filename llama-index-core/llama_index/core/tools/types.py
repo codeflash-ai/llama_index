@@ -2,6 +2,7 @@ import json
 from abc import abstractmethod
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Dict, Optional, Type
+from functools import lru_cache
 
 if TYPE_CHECKING:
     from llama_index.core.bridge.langchain import StructuredTool, Tool
@@ -197,3 +198,17 @@ def adapt_to_async_tool(tool: BaseTool) -> AsyncBaseTool:
         return tool
     else:
         return BaseToolAsyncAdapter(tool)
+
+
+def _adapt_to_async_tool(tool):
+    """Internal helper for caching adapt_to_async_tool using id(tool)."""
+    # Note: This does not mutate the tool object, preserves side effects.
+    if isinstance(tool, AsyncBaseTool):
+        return tool
+    else:
+        return BaseToolAsyncAdapter(tool)
+
+
+@lru_cache(maxsize=512)
+def _adapt_to_async_tool_cache(tool_id, tool):
+    return _adapt_to_async_tool(tool)
