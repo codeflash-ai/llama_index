@@ -54,6 +54,8 @@ from llama_index.core.storage.storage_context import DOCSTORE_FNAME
 from llama_index.core.utils import concat_dirs
 from llama_index.core.vector_stores.types import BasePydanticVectorStore
 
+_PATTERN_UNSTABLE = re.compile(r"<[\w\s_\. ]+ at 0x[a-z0-9]+>")
+
 
 def deserialize_transformation_component(
     component_dict: dict, component_type: ConfigurableTransformationNames
@@ -76,8 +78,7 @@ def remove_unstable_values(s: str) -> str:
     - <__main__.Test object at 0x7fb9f3793f50>
     - <function test_fn at 0x7fb9f37a8900>
     """
-    pattern = r"<[\w\s_\. ]+ at 0x[a-z0-9]+>"
-    return re.sub(pattern, "", s)
+    return _PATTERN_UNSTABLE.sub("", s)
 
 
 def get_transformation_hash(
