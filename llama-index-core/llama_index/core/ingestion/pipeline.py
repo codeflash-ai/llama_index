@@ -793,20 +793,23 @@ class IngestionPipeline(BaseModel):
         """Handle docstore upserts by checking hashes and ids."""
         assert self.docstore is not None
 
-        existing_doc_ids_before = set(
-            (await self.docstore.aget_all_document_hashes()).values()
-        )
+        # FAST BATCH LOOKUP:
+        doc_ids_needed = [node.ref_doc_id if node.ref_doc_id else node.id_ for node in nodes]
+        # Get all hashes at once
+        all_hashes = await self.docstore.aget_all_document_hashes()
+        # Map: doc_id -> stored_hash (only for docs in docstore; absent key -> not in store)
+        existing_doc_ids_before = set(all_hashes.keys())
         doc_ids_from_nodes = set()
         deduped_nodes_to_run = {}
         for node in nodes:
             ref_doc_id = node.ref_doc_id if node.ref_doc_id else node.id_
             doc_ids_from_nodes.add(ref_doc_id)
-            existing_hash = await self.docstore.aget_document_hash(ref_doc_id)
+            existing_hash = all_hashes.get(ref_doc_id)
             if not existing_hash:
                 # document doesn't exist, so add it
                 await self.docstore.aset_document_hash(ref_doc_id, node.hash)
                 deduped_nodes_to_run[ref_doc_id] = node
-            elif existing_hash and existing_hash != node.hash:
+            elif existing_hash != node.hash:
                 await self.docstore.adelete_ref_doc(ref_doc_id, raise_error=False)
 
                 if self.vector_store is not None:
