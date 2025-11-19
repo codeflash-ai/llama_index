@@ -14,23 +14,42 @@ def md_to_df(md_str: str) -> pd.DataFrame:
     # Replace " by "" in md_str
     md_str = md_str.replace('"', '""')
 
-    # Replace markdown pipe tables with commas
-    md_str = md_str.replace("|", '","')
-
     # Remove the second line (table header separator)
     lines = md_str.split("\n")
-    md_str = "\n".join(lines[:1] + lines[2:])
+    if len(lines) < 2:
+        # Not a valid markdown table, return None early
+        return None
 
-    # Remove the first and last second char of the line (the pipes, transformed to ",")
-    lines = md_str.split("\n")
-    md_str = "\n".join([line[2:-2] for line in lines])
+    # Remove the second line (table header separator)
+    # and process only the remaining lines
+    filtered_lines = lines[:1] + lines[2:]
+    n_lines = len(filtered_lines)
+
+    # Remove first and last char (pipes, which may have been transformed by replace)
+    # Instead of joining/re-splitting, build output in a single loop for efficiency
+    processed_lines = []
+    for line in filtered_lines:
+        # Skip lines that are too short to process
+        if len(line) >= 4:
+            processed_lines.append(line[2:-2])
+        elif len(line) > 0:
+            # Line too short but not empty, skip processing pipes
+            processed_lines.append('')
+        # else, empty line, skip
+
+    # Check if the table is empty
+    if not processed_lines or all(len(line) == 0 for line in processed_lines):
+        return None
+
+    md_str = '\n'.join(processed_lines)
 
     # Check if the table is empty
     if len(md_str) == 0:
         return None
 
     # Use pandas to read the CSV string into a DataFrame
-    return pd.read_csv(StringIO(md_str))
+    # Pass low_memory=False for faster type inference (better perf for small tables, slightly higher memory usage)
+    return pd.read_csv(StringIO(md_str), low_memory=False)
 
 
 class MarkdownElementNodeParser(BaseElementNodeParser):
