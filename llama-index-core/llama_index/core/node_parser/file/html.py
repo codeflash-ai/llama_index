@@ -107,14 +107,20 @@ class HTMLNodeParser(NodeParser):
         from bs4 import NavigableString
 
         texts = []
+        # Convert self.tags to a set for faster lookup
+        tag_set = set(self.tags)
+        append = texts.append  # Localize for minor performance gain
         for elem in tag.children:
             if isinstance(elem, NavigableString):
-                if elem.strip():
-                    texts.append(elem.strip())
-            elif elem.name in self.tags:
+                stripped = elem.strip()
+                if stripped:
+                    append(stripped)
+            elif elem.name in tag_set:
                 continue
             else:
-                texts.append(elem.get_text().strip())
+                text = elem.get_text()
+                stripped = text.strip()
+                append(stripped)
         return "\n".join(texts)
 
     def _build_node_from_split(
