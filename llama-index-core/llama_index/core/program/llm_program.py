@@ -43,7 +43,7 @@ class LLMTextCompletionProgram(BasePydanticProgram[BaseModel]):
         verbose: bool = False,
         **kwargs: Any,
     ) -> "LLMTextCompletionProgram":
-        llm = llm or Settings.llm
+        llm = llm if llm is not None else Settings.llm
         if prompt is None and prompt_template_str is None:
             raise ValueError("Must provide either prompt or prompt_template_str.")
         if prompt is not None and prompt_template_str is not None:
@@ -56,9 +56,9 @@ class LLMTextCompletionProgram(BasePydanticProgram[BaseModel]):
             if not isinstance(output_parser, PydanticOutputParser):
                 raise ValueError("Output parser must be PydanticOutputParser.")
             output_cls = output_parser.output_cls
-        else:
-            if output_parser is None:
-                output_parser = PydanticOutputParser(output_cls=output_cls)
+        elif output_parser is None:
+            output_parser = PydanticOutputParser(output_cls=output_cls)
+
 
         return cls(
             output_parser,
