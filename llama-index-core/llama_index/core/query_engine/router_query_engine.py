@@ -293,12 +293,15 @@ class RetrieverRouterQueryEngine(BaseQueryEngine):
     ) -> None:
         self._retriever = retriever
         self._node_to_query_engine_fn = node_to_query_engine_fn
+        # Cache prompt modules for improved performance in _get_prompt_modules
+        self._prompt_modules = {"retriever": self._retriever}
         super().__init__(callback_manager)
 
     def _get_prompt_modules(self) -> PromptMixinType:
         """Get prompt sub-modules."""
         # NOTE: don't include tools for now
-        return {"retriever": self._retriever}
+        # Use cached value to avoid recreating the dict on every call
+        return self._prompt_modules
 
     def _query(self, query_bundle: QueryBundle) -> RESPONSE_TYPE:
         nodes_with_score = self._retriever.retrieve(query_bundle)
