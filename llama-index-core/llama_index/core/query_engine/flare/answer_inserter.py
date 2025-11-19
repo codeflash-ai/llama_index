@@ -206,10 +206,14 @@ class DirectLookaheadAnswerInserter(BaseLookaheadAnswerInserter):
         prev_response: Optional[str] = None,
     ) -> str:
         """Insert answers into response."""
+        if not query_tasks:
+            return response
+        
+        result = []
+        prev_idx = 0
         for query_task, answer in zip(query_tasks, answers):
-            response = (
-                response[: query_task.start_idx]
-                + answer
-                + response[query_task.end_idx + 1 :]
-            )
-        return response
+            result.append(response[prev_idx:query_task.start_idx])
+            result.append(answer)
+            prev_idx = query_task.end_idx + 1
+        result.append(response[prev_idx:])
+        return ''.join(result)
