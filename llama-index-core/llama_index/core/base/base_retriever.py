@@ -176,36 +176,41 @@ class BaseRetriever(ChainableMixin, PromptMixin):
     async def _ahandle_recursive_retrieval(
         self, query_bundle: QueryBundle, nodes: List[NodeWithScore]
     ) -> List[NodeWithScore]:
+        object_map = self.object_map
+        verbose = self._verbose
         retrieved_nodes: List[NodeWithScore] = []
+        seen_hashes = set()
         for n in nodes:
             node = n.node
             score = n.score or 1.0
             if isinstance(node, IndexNode):
-                obj = node.obj or self.object_map.get(node.index_id, None)
+                obj = node.obj or object_map.get(node.index_id, None)
                 if obj is not None:
-                    if self._verbose:
+                    if verbose:
                         print_text(
                             f"Retrieval entering {node.index_id}: {obj.__class__.__name__}\n",
                             color="llama_turquoise",
                         )
                     # TODO: Add concurrent execution via `run_jobs()` ?
-                    retrieved_nodes.extend(
-                        await self._aretrieve_from_object(
-                            obj, query_bundle=query_bundle, score=score
-                        )
+                    results = await self._aretrieve_from_object(
+                        obj, query_bundle=query_bundle, score=score
                     )
+                    for retrieved_n in results:
+                        node_hash = retrieved_n.node.hash
+                        if node_hash not in seen_hashes:
+                            seen_hashes.add(node_hash)
+                            retrieved_nodes.append(retrieved_n)
                 else:
-                    retrieved_nodes.append(n)
+                    node_hash = n.node.hash
+                    if node_hash not in seen_hashes:
+                        seen_hashes.add(node_hash)
+                        retrieved_nodes.append(n)
             else:
-                retrieved_nodes.append(n)
-
-        # remove any duplicates based on hash
-        seen = set()
-        return [
-            n
-            for n in retrieved_nodes
-            if not (n.node.hash in seen or seen.add(n.node.hash))  # type: ignore[func-returns-value]
-        ]
+                node_hash = n.node.hash
+                if node_hash not in seen_hashes:
+                    seen_hashes.add(node_hash)
+                    retrieved_nodes.append(n)
+        return retrieved_nodes
 
     def retrieve(self, str_or_query_bundle: QueryType) -> List[NodeWithScore]:
         """Retrieve nodes given query.
@@ -235,7 +240,6 @@ class BaseRetriever(ChainableMixin, PromptMixin):
         return nodes
 
     async def aretrieve(self, str_or_query_bundle: QueryType) -> List[NodeWithScore]:
-        self._check_callback_manager()
 
         if isinstance(str_or_query_bundle, str):
             query_bundle = QueryBundle(str_or_query_bundle)
