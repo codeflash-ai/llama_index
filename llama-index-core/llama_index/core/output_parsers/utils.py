@@ -8,6 +8,8 @@ with contextlib.suppress(ImportError):
 
 from llama_index.core.output_parsers.base import OutputParserException
 
+_JSON_REGEX = re.compile(r"\{.*\}", re.MULTILINE | re.IGNORECASE | re.DOTALL)
+
 
 def _marshal_llm_to_json(output: str) -> str:
     """
@@ -107,7 +109,7 @@ def parse_code_markdown(text: str, only_last: bool) -> List[str]:
 def extract_json_str(text: str) -> str:
     """Extract JSON string from text."""
     # NOTE: this regex parsing is taken from langchain.output_parsers.pydantic
-    match = re.search(r"\{.*\}", text.strip(), re.MULTILINE | re.IGNORECASE | re.DOTALL)
+    match = _JSON_REGEX.search(text)
     if not match:
         raise ValueError(f"Could not extract json string from output: {text}")
 
