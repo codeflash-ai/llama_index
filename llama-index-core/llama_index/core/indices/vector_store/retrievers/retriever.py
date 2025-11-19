@@ -59,13 +59,18 @@ class VectorIndexRetriever(BaseRetriever):
         self._docstore = self._index.docstore
 
         self._similarity_top_k = similarity_top_k
-        self._vector_store_query_mode = VectorStoreQueryMode(vector_store_query_mode)
+        # Avoid recreating the enum if it's already of the correct type
+        if isinstance(vector_store_query_mode, VectorStoreQueryMode):
+            self._vector_store_query_mode = vector_store_query_mode
+        else:
+            self._vector_store_query_mode = VectorStoreQueryMode(vector_store_query_mode)
         self._alpha = alpha
         self._node_ids = node_ids
         self._doc_ids = doc_ids
         self._filters = filters
         self._sparse_top_k = sparse_top_k
-        self._kwargs: Dict[str, Any] = kwargs.get("vector_store_kwargs", {})
+        # Directly assign or copy kwargs instead of extracting with get (faster dict assignment)
+        self._kwargs: Dict[str, Any] = kwargs["vector_store_kwargs"] if "vector_store_kwargs" in kwargs else {}
         super().__init__(
             callback_manager=callback_manager, object_map=object_map, verbose=verbose
         )
@@ -107,16 +112,19 @@ class VectorIndexRetriever(BaseRetriever):
     def _build_vector_store_query(
         self, query_bundle_with_embeddings: QueryBundle
     ) -> VectorStoreQuery:
+        # Use local variables to avoid attribute lookups in tight code and minimize dot access overhead
+        qb = query_bundle_with_embeddings
+        # Use positional arguments for VectorStoreQuery for speed (faster than kwargs in many microbenchmarks)
         return VectorStoreQuery(
-            query_embedding=query_bundle_with_embeddings.embedding,
-            similarity_top_k=self._similarity_top_k,
-            node_ids=self._node_ids,
-            doc_ids=self._doc_ids,
-            query_str=query_bundle_with_embeddings.query_str,
-            mode=self._vector_store_query_mode,
-            alpha=self._alpha,
-            filters=self._filters,
-            sparse_top_k=self._sparse_top_k,
+            qb.embedding,
+            self._similarity_top_k,
+            self._node_ids,
+            self._doc_ids,
+            qb.query_str,
+            self._vector_store_query_mode,
+            self._alpha,
+            self._filters,
+            self._sparse_top_k,
         )
 
     def _build_node_list_from_query_result(
