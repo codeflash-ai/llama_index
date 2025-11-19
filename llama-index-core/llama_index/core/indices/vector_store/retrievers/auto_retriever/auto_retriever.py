@@ -110,6 +110,10 @@ class VectorIndexAutoRetriever(BaseAutoRetriever):
         self._output_parser = VectorStoreQueryOutputParser()
         self._prompt = PromptTemplate(template=prompt_template_str)
 
+        # Cache the static schema string and vector info JSON for fast reuse
+        self._schema_str = VectorStoreQuerySpec.schema_json(indent=4)
+        self._info_str = self._vector_store_info.json(indent=4)
+
         # additional config
         self._max_top_k = max_top_k
         self._similarity_top_k = similarity_top_k
@@ -189,8 +193,8 @@ class VectorIndexAutoRetriever(BaseAutoRetriever):
         self, query_bundle: QueryBundle, **kwargs: Any
     ) -> BaseModel:
         # prepare input
-        info_str = self._vector_store_info.json(indent=4)
-        schema_str = VectorStoreQuerySpec.schema_json(indent=4)
+        info_str = self._info_str
+        schema_str = self._schema_str
 
         # call LLM
         output = await self._llm.apredict(
