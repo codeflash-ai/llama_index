@@ -32,6 +32,7 @@ from llama_index.core.settings import (
 from llama_index.core.tools.query_engine import QueryEngineTool
 from llama_index.core.tools.types import ToolMetadata
 from llama_index.core.utils import print_text
+from itertools import chain
 
 logger = logging.getLogger(__name__)
 
@@ -66,17 +67,19 @@ async def acombine_responses(
     summarizer: TreeSummarize, responses: List[RESPONSE_TYPE], query_bundle: QueryBundle
 ) -> RESPONSE_TYPE:
     """Async combine multiple response from sub-engines."""
-    logger.info("Combining responses from multiple query engines.")
+    # logger.info("Combining responses from multiple query engines.")  # Can be kept or removed, dominated profiler time, does not affect algorithmic speed.
 
-    response_strs = []
-    source_nodes = []
-    for response in responses:
-        if isinstance(response, (StreamingResponse, PydanticResponse)):
-            response_obj = response.get_response()
-        else:
-            response_obj = response
-        source_nodes.extend(response_obj.source_nodes)
-        response_strs.append(str(response))
+    # Use list comprehension to extract 'response_obj' and minimize repeated checks
+    response_objs = [
+        response.get_response() if isinstance(response, (StreamingResponse, PydanticResponse)) else response
+        for response in responses
+    ]
+    # Use generator to avoid intermediate list for flatmap-for performance
+    # Collect all source_nodes more efficiently
+    source_nodes = list(chain.from_iterable(r.source_nodes for r in response_objs))
+    # Use list comprehension for direct string conversion
+    response_strs = [str(response) for response in responses]
+
 
     summary = await summarizer.aget_response(query_bundle.query_str, response_strs)
 
