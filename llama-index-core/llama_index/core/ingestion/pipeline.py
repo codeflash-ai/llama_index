@@ -573,17 +573,18 @@ class IngestionPipeline(BaseModel):
     ) -> List[Document]:
         input_nodes: List[BaseNode] = []
         if documents is not None:
-            input_nodes += documents
+            input_nodes.extend(documents)
 
         if nodes is not None:
-            input_nodes += nodes
+            input_nodes.extend(nodes)
 
         if self.documents is not None:
-            input_nodes += self.documents
+            input_nodes.extend(self.documents)
 
         if self.readers is not None:
             for reader in self.readers:
-                input_nodes += reader.read()
+                docs = reader.read()
+                input_nodes.extend(docs)
 
         return input_nodes
 
