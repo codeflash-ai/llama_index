@@ -83,7 +83,6 @@ class TreeSummarize(BaseSynthesizer):
 
         # give final response if there is only one chunk
         if len(text_chunks) == 1:
-            response: RESPONSE_TEXT_TYPE
             if self._streaming:
                 response = self._llm.stream(
                     summary_template, context_str=text_chunks[0], **response_kwargs
@@ -106,40 +105,38 @@ class TreeSummarize(BaseSynthesizer):
             # return pydantic object if output_cls is specified
             return response
 
+        # summarize each chunk, only branch once for output_cls
+        if self._output_cls is None:
+            tasks = [
+                self._llm.apredict(
+                    summary_template,
+                    context_str=text_chunk,
+                    **response_kwargs,
+                )
+                for text_chunk in text_chunks
+            ]
+            summary_responses = await asyncio.gather(*tasks)
+            summaries = summary_responses
         else:
-            # summarize each chunk
-            if self._output_cls is None:
-                tasks = [
-                    self._llm.apredict(
-                        summary_template,
-                        context_str=text_chunk,
-                        **response_kwargs,
-                    )
-                    for text_chunk in text_chunks
-                ]
-            else:
-                tasks = [
-                    self._llm.astructured_predict(
-                        self._output_cls,
-                        summary_template,
-                        context_str=text_chunk,
-                        **response_kwargs,
-                    )
-                    for text_chunk in text_chunks
-                ]
+            tasks = [
+                self._llm.astructured_predict(
+                    self._output_cls,
+                    summary_template,
+                    context_str=text_chunk,
+                    **response_kwargs,
+                )
+                for text_chunk in text_chunks
+            ]
 
             summary_responses = await asyncio.gather(*tasks)
-            if self._output_cls is not None:
-                summaries = [summary.json() for summary in summary_responses]
-            else:
-                summaries = summary_responses
+            summaries = [summary.json() for summary in summary_responses]
 
-            # recursively summarize the summaries
-            return await self.aget_response(
-                query_str=query_str,
-                text_chunks=summaries,
-                **response_kwargs,
-            )
+        # recursively summarize the summaries
+        return await self.aget_response(
+            query_str=query_str,
+            text_chunks=summaries,
+            **response_kwargs,
+        )
 
     def get_response(
         self,
