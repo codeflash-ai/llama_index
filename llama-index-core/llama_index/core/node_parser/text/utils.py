@@ -14,9 +14,27 @@ def truncate_text(text: str, text_splitter: TextSplitter) -> str:
 
 def split_text_keep_separator(text: str, separator: str) -> List[str]:
     """Split text with separator and keep the separator at the end of each split."""
+    if separator == "":
+        # Behavior preservation: match str.split('')
+        raise ValueError("empty separator")
+
     parts = text.split(separator)
-    result = [separator + s if i > 0 else s for i, s in enumerate(parts)]
-    return [s for s in result if s]
+    n = len(parts)
+    if n == 1:
+        # Only one split part; just return, possibly empty
+        return [parts[0]] if parts[0] else []
+    
+    # Fast direct construction: allocate once, avoid extra list comprehensions
+    result: List[str] = []
+    # First part doesn't get separator in front
+    if parts[0]:
+        result.append(parts[0])
+    # Remaining parts get separator prepended
+    for s in parts[1:]:
+        combined = separator + s
+        if combined:
+            result.append(combined)
+    return result
 
 
 def split_by_sep(sep: str, keep_sep: bool = True) -> Callable[[str], List[str]]:
