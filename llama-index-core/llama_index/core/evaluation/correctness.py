@@ -97,12 +97,11 @@ class CorrectnessEvaluator(BaseEvaluator):
         ] = default_parser,
     ) -> None:
         self._llm = llm or llm_from_settings_or_context(Settings, service_context)
-
-        self._eval_template: BasePromptTemplate
         if isinstance(eval_template, str):
-            self._eval_template = PromptTemplate(eval_template)
+            self._eval_template: BasePromptTemplate = PromptTemplate(eval_template)
         else:
-            self._eval_template = eval_template or DEFAULT_EVAL_TEMPLATE
+            self._eval_template: BasePromptTemplate = eval_template or DEFAULT_EVAL_TEMPLATE
+
 
         self._score_threshold = score_threshold
         self.parser_function = parser_function
@@ -127,28 +126,33 @@ class CorrectnessEvaluator(BaseEvaluator):
         sleep_time_in_seconds: int = 0,
         **kwargs: Any,
     ) -> EvaluationResult:
-        del kwargs  # Unused
-        del contexts  # Unused
-
-        await asyncio.sleep(sleep_time_in_seconds)
 
         if query is None or response is None:
             raise ValueError("query, and response must be provided")
+
+
+        if sleep_time_in_seconds:
+            await asyncio.sleep(sleep_time_in_seconds)
+
+        ref_answer = reference if reference is not None else "(NO REFERENCE ANSWER SUPPLIED)"
 
         eval_response = await self._llm.apredict(
             prompt=self._eval_template,
             query=query,
             generated_answer=response,
-            reference_answer=reference or "(NO REFERENCE ANSWER SUPPLIED)",
+            reference_answer=ref_answer,
         )
 
         # Use the parser function
         score, reasoning = self.parser_function(eval_response)
 
+
+        passing = score >= self._score_threshold if score is not None else None
+
         return EvaluationResult(
             query=query,
             response=response,
-            passing=score >= self._score_threshold if score is not None else None,
+            passing=passing,
             score=score,
             feedback=reasoning,
         )
