@@ -79,12 +79,14 @@ class SubQuestionQueryEngine(BaseQueryEngine):
         self._use_async = use_async
         super().__init__(callback_manager)
 
-    def _get_prompt_modules(self) -> PromptMixinType:
-        """Get prompt sub-modules."""
-        return {
+        self._prompt_modules = {
             "question_gen": self._question_gen,
             "response_synthesizer": self._response_synthesizer,
         }
+
+    def _get_prompt_modules(self) -> PromptMixinType:
+        """Get prompt sub-modules."""
+        return self._prompt_modules
 
     @classmethod
     def from_defaults(
