@@ -1,14 +1,15 @@
-"""Document store."""
-
 from typing import Dict, List, Optional, Sequence, Tuple
 
+from codeflash.code_utils.codeflash_wrap_decorator import codeflash_performance_async
+
 from llama_index.core.schema import BaseNode, TextNode
-from llama_index.core.storage.docstore.types import (
-    BaseDocumentStore,
-    RefDocInfo,
-)
+from llama_index.core.storage.docstore.types import BaseDocumentStore, RefDocInfo
 from llama_index.core.storage.docstore.utils import doc_to_json, json_to_doc
 from llama_index.core.storage.kvstore.types import DEFAULT_BATCH_SIZE, BaseKVStore
+from collections import defaultdict
+
+"""Document store."""
+
 
 DEFAULT_NAMESPACE = "docstore"
 
@@ -198,7 +199,7 @@ class KVDocumentStore(BaseDocumentStore):
 
         node_kv_pairs = []
         metadata_kv_pairs = []
-        ref_doc_kv_pairs: Dict[str, List[Tuple[str, dict]]] = {}
+        ref_doc_kv_pairs: Dict[str, List[Tuple[str, dict]]] = defaultdict(list)
 
         for node in nodes:
             # NOTE: doc could already exist in the store, but we overwrite it
@@ -225,8 +226,6 @@ class KVDocumentStore(BaseDocumentStore):
                 metadata_kv_pairs.append(metadata_kv_pair)
             if ref_doc_kv_pair is not None:
                 key = ref_doc_kv_pair[0]
-                if key not in ref_doc_kv_pairs:
-                    ref_doc_kv_pairs[key] = []
                 ref_doc_kv_pairs[key].append(ref_doc_kv_pair)
 
         await self._kvstore.aput_all(
@@ -345,9 +344,14 @@ class KVDocumentStore(BaseDocumentStore):
         """Check if a ref_doc_id has been ingested."""
         return self.get_ref_doc_info(ref_doc_id) is not None
 
+    @codeflash_performance_async
     async def aref_doc_exists(self, ref_doc_id: str) -> bool:
         """Check if a ref_doc_id has been ingested."""
-        return await self.aget_ref_doc_info(ref_doc_id) is not None
+        # Optimize: run aget and shortcut without extra await
+        ref_doc_info = await self._kvstore.aget(
+            ref_doc_id, collection=self._ref_doc_collection
+        )
+        return ref_doc_info is not None
 
     def document_exists(self, doc_id: str) -> bool:
         """Check if document exists."""
@@ -544,11 +548,13 @@ class KVDocumentStore(BaseDocumentStore):
 
     async def aget_all_document_hashes(self) -> Dict[str, str]:
         """Get the stored hash for all documents."""
-        hashes = {}
-        for doc_id in await self._kvstore.aget_all(
+        # More efficient: fetch all metadata at once, then construct hash->doc_id mapping in memory.
+        all_metadata = await self._kvstore.aget_all(
             collection=self._metadata_collection
-        ):
-            hash = await self.aget_document_hash(doc_id)
-            if hash is not None:
-                hashes[hash] = doc_id
+        )
+        hashes = {}
+        for doc_id, metadata in all_metadata.items():
+            doc_hash = metadata.get("doc_hash")
+            if doc_hash is not None:
+                hashes[doc_hash] = doc_id
         return hashes

@@ -9,7 +9,7 @@ from functools import partial, reduce
 from hashlib import sha256
 from itertools import repeat
 from pathlib import Path
-from typing import Any, Generator, List, Optional, Sequence, Union, cast
+from typing import Set, Any, Generator, List, Optional, Sequence, Union, cast
 
 from fsspec import AbstractFileSystem
 from llama_index_client import (
@@ -772,14 +772,17 @@ class IngestionPipeline(BaseModel):
         """Handle docstore duplicates by checking all hashes."""
         assert self.docstore is not None
 
-        existing_hashes = await self.docstore.aget_all_document_hashes()
-        current_hashes = []
+        existing_hashes_dict = await self.docstore.aget_all_document_hashes()
+        existing_hashes: Set[str] = set(existing_hashes_dict.keys())
+        current_hashes: Set[str] = set()
         nodes_to_run = []
         for node in nodes:
-            if node.hash not in existing_hashes and node.hash not in current_hashes:
-                await self.docstore.aset_document_hash(node.id_, node.hash)
+            node_hash = node.hash
+            if node_hash not in existing_hashes and node_hash not in current_hashes:
+                await self.docstore.aset_document_hash(node.id_, node_hash)
                 nodes_to_run.append(node)
-                current_hashes.append(node.hash)
+                current_hashes.add(node_hash)
+
 
         await self.docstore.async_add_documents(nodes_to_run, store_text=store_doc_text)
 
