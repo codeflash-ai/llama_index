@@ -127,11 +127,13 @@ class VectorIndexAutoRetriever(BaseAutoRetriever):
             verbose=verbose,
         )
 
+
+        # Optimization: Precompute the prompt dict for _get_prompts
+        self._prompt_dict: PromptDictType = {"prompt": self._prompt}
+
     def _get_prompts(self) -> PromptDictType:
         """Get prompts."""
-        return {
-            "prompt": self._prompt,
-        }
+        return self._prompt_dict
 
     def _update_prompts(self, prompts: PromptDictType) -> None:
         """Get prompt modules."""
