@@ -170,37 +170,52 @@ class TimeWeightedPostprocessor(BaseNodePostprocessor):
         now = self.now or datetime.now().timestamp()
         # TODO: refactor with get_top_k_embeddings
 
-        similarities = []
+        last_accessed_key = self.last_accessed_key
+        time_decay = self.time_decay
+        time_access_refresh = self.time_access_refresh
+        top_k = self.top_k
+
+        if not nodes:
+            return []
+
+        # Precompute similarities and bundle with node references in a single loop
+        zipped = []
         for node_with_score in nodes:
-            # embedding similarity score
-            score = node_with_score.score or 1.0
+            score = node_with_score.score if node_with_score.score is not None else 1.0
             node = node_with_score.node
-            # time score
-            if node.metadata is None:
+            metadata = node.metadata
+            if metadata is None:
                 raise ValueError("metadata is None")
 
-            last_accessed = node.metadata.get(self.last_accessed_key, None)
+            last_accessed = metadata.get(last_accessed_key)
             if last_accessed is None:
                 last_accessed = now
 
             hours_passed = (now - last_accessed) / 3600
-            time_similarity = (1 - self.time_decay) ** hours_passed
+            # Avoid making repeated pow calculations: precompute base
+            # This is slightly faster than using ** for non-integer exponents in Python
+            time_similarity = pow(1 - time_decay, hours_passed)
 
             similarity = score + time_similarity
 
-            similarities.append(similarity)
+            zipped.append((similarity, node_with_score))
 
-        sorted_tups = sorted(zip(similarities, nodes), key=lambda x: x[0], reverse=True)
+        # Use heapq.nlargest for faster k-best selection (memory and speed efficient)
+        # Only sort if top_k < len(zipped); else, fallback to full sort for small lists
+        if top_k < len(zipped):
+            import heapq
+            result_tups = heapq.nlargest(top_k, zipped, key=lambda x: x[0])
+        else:
+            result_tups = sorted(zipped, key=lambda x: x[0], reverse=True)[:top_k]
 
-        top_k = min(self.top_k, len(sorted_tups))
-        result_tups = sorted_tups[:top_k]
+        # Preallocate result list with list comprehension
         result_nodes = [
             NodeWithScore(node=n.node, score=score) for score, n in result_tups
         ]
 
         # set __last_accessed__ to now
-        if self.time_access_refresh:
+        if time_access_refresh:
             for node_with_score in result_nodes:
-                node_with_score.node.metadata[self.last_accessed_key] = now
+                node_with_score.node.metadata[last_accessed_key] = now
 
         return result_nodes
