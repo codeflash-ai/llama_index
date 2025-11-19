@@ -54,7 +54,6 @@ class CodeSplitter(TextSplitter):
         id_func: Optional[Callable[[int, Document], str]] = None,
     ) -> None:
         """Initialize a CodeSplitter."""
-        from tree_sitter import Parser  # pants: no-infer-dep
 
         if parser is None:
             try:
@@ -73,13 +72,20 @@ class CodeSplitter(TextSplitter):
                     "for a list of valid languages."
                 )
                 raise
+        # Only import Parser and do isinstance check if validation is needed
+        # (this avoids a potentially slow import unless necessary)
+        from tree_sitter import Parser  # pants: no-infer-dep
         if not isinstance(parser, Parser):
             raise ValueError("Parser must be a tree-sitter Parser object.")
 
         self._parser = parser
 
-        callback_manager = callback_manager or CallbackManager([])
-        id_func = id_func or default_id_func
+        # Avoid unnecessary allocations if possible
+        if callback_manager is None:
+            callback_manager = CallbackManager([])
+        if id_func is None:
+            id_func = default_id_func
+
 
         super().__init__(
             language=language,
