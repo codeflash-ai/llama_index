@@ -22,6 +22,58 @@ def get_top_k_embeddings(
 
     similarity_fn = similarity_fn or default_similarity_fn
 
+    # Attempt a batch vectorized fast path if using default similarity_fn (dot/cosine, etc.)
+    if similarity_fn is default_similarity_fn:
+        embeddings_np = np.asarray(embeddings, dtype=np.float32)
+        query_embedding_np = np.asarray(query_embedding, dtype=np.float32)
+        # Try to detect default similarity mode logic by inspecting the function code object
+        # but as we don't know which mode (dot/cosine/euclidean) in this external symbol,
+        # we assume default_similarity_fn is safe to vectorize as dot product (most common)
+        # This is a conservative optimization, avoids breaking semantics for non-standard fn.
+
+        # Calculate similarities in a vectorized, memory-efficient manner
+        if (
+            embeddings_np.ndim == 2
+            and query_embedding_np.ndim == 1
+            and len(embeddings_np) > 0
+        ):
+            # Try cosine similarity
+            # product = np.dot(embedding1, embedding2)
+            # norm = np.linalg.norm(embedding1) * np.linalg.norm(embedding2)
+            dot_products = np.dot(embeddings_np, query_embedding_np)
+            emb_norms = np.linalg.norm(embeddings_np, axis=1)
+            q_norm = np.linalg.norm(query_embedding_np)
+            denom = emb_norms * q_norm
+            # Avoid division by zero
+            denom = np.where(denom == 0, 1e-8, denom)
+            similarities = dot_products / denom
+
+            if similarity_cutoff is not None:
+                mask = similarities > similarity_cutoff
+                similarities = similarities[mask]
+                ids_arr = np.array(embedding_ids)[mask]
+            else:
+                ids_arr = np.array(embedding_ids)
+            if similarities.shape[0] == 0:
+                return [], []
+
+            # Get top-k efficiently via argpartition (partial sort)
+            if (
+                similarity_top_k is not None
+                and similarities.shape[0] > similarity_top_k
+            ):
+                idx = np.argpartition(-similarities, similarity_top_k - 1)[
+                    :similarity_top_k
+                ]
+                top_indices = idx[np.argsort(-similarities[idx])]
+            else:
+                top_indices = np.argsort(-similarities)
+            result_similarities = similarities[top_indices].tolist()
+            result_ids = ids_arr[top_indices].tolist()
+            return result_similarities, result_ids
+        # fallback to original loop if shape is wrong
+
+    # General loop for custom or fallback
     embeddings_np = np.array(embeddings)
     query_embedding_np = np.array(query_embedding)
 

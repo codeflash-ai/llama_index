@@ -49,6 +49,12 @@ class EmbeddingSingleSelector(BaseSelector):
     def _select(
         self, choices: Sequence[ToolMetadata], query: QueryBundle
     ) -> SelectorResult:
+        # Optimization: Early exit if choices has only one item
+        if len(choices) == 1:
+            top_selection_reason = f"Single tool: {choices[0].name}"
+            top_selection = SingleSelection(index=0, reason=top_selection_reason)
+            return SelectorResult(selections=[top_selection])
+
         query_embedding = self._embed_model.get_query_embedding(query.query_str)
         text_embeddings = [
             self._embed_model.get_text_embedding(choice.description)
