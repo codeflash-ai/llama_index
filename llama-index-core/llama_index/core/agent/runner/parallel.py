@@ -79,7 +79,7 @@ class ParallelAgentRunner(BaseAgentRunner):
         self,
         agent_worker: BaseAgentWorker,
         chat_history: Optional[List[ChatMessage]] = None,
-        state: Optional[DAGAgentState] = None,
+        state: Optional["DAGAgentState"] = None,
         memory: Optional[BaseMemory] = None,
         llm: Optional[LLM] = None,
         callback_manager: Optional[CallbackManager] = None,
@@ -138,8 +138,8 @@ class ParallelAgentRunner(BaseAgentRunner):
 
     def list_tasks(self, **kwargs: Any) -> List[Task]:
         """List tasks."""
-        task_states = list(self.state.task_dict.values())
-        return [task_state.task for task_state in task_states]
+        # Optimize by avoiding creating intermediate list of task_states
+        return [task_state.task for task_state in self.state.task_dict.values()]
 
     def get_task(self, task_id: str, **kwargs: Any) -> Task:
         """Get task."""
