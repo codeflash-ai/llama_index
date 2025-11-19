@@ -4,6 +4,8 @@ from typing import Dict, Type
 from llama_index.core.storage.docstore.simple_docstore import SimpleDocumentStore
 from llama_index.core.storage.docstore.types import BaseDocumentStore
 
+_default_docstore: BaseDocumentStore = SimpleDocumentStore()
+
 
 class DocumentStoreType(str, Enum):
     MONGO = "mongo"
@@ -21,4 +23,4 @@ DOCSTORE_CLASS_TO_TYPE: Dict[Type[BaseDocumentStore], DocumentStoreType] = {
 
 
 def get_default_docstore() -> BaseDocumentStore:
-    return SimpleDocumentStore()
+    return _default_docstore
