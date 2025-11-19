@@ -418,7 +418,9 @@ def get_color_mapping(
         color_palette = _ANSI_COLORS
 
     colors = list(color_palette.keys())
-    return {item: colors[i % len(colors)] for i, item in enumerate(items)}
+    colors_len = len(colors)
+    # Slightly faster than dict comprehension with enumerate+modulo for repeated lookups
+    return {item: colors[i % colors_len] for i, item in enumerate(items)}
 
 
 def _get_colored_text(text: str, color: str) -> str:

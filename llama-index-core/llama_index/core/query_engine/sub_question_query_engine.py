@@ -200,8 +200,9 @@ class SubQuestionQueryEngine(BaseQueryEngine):
             qa_pairs_all = await asyncio.gather(*tasks)
             qa_pairs_all = cast(List[Optional[SubQuestionAnswerPair]], qa_pairs_all)
 
-            # filter out sub questions that failed
-            qa_pairs: List[SubQuestionAnswerPair] = list(filter(None, qa_pairs_all))
+            # filter out sub questions that failed, this is faster than filter+list
+            qa_pairs: List[SubQuestionAnswerPair] = [x for x in qa_pairs_all if x is not None]
+
 
             nodes = [self._construct_node(pair) for pair in qa_pairs]
 

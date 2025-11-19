@@ -53,7 +53,10 @@ class CallbackManager(BaseCallbackHandler, ABC):
         """Initialize the manager with a list of handlers."""
         from llama_index.core import global_handler
 
-        handlers = handlers or []
+        if handlers is None:
+            handlers = []
+
+        # add eval handlers based on global defaults
 
         # add eval handlers based on global defaults
         if global_handler is not None:
@@ -163,22 +166,20 @@ class CallbackManager(BaseCallbackHandler, ABC):
         # create event context wrapper
         event = EventContext(self, event_type, event_id=event_id)
         event.on_start(payload=payload)
-
-        payload = None
         try:
             yield event
         except Exception as e:
             # data already logged to trace?
             if not hasattr(e, "event_added"):
-                payload = {EventPayload.EXCEPTION: e}
+                exception_payload = {EventPayload.EXCEPTION: e}
                 e.event_added = True  # type: ignore
                 if not event.finished:
-                    event.on_end(payload=payload)
+                    event.on_end(payload=exception_payload)
             raise
         finally:
             # ensure event is ended
             if not event.finished:
-                event.on_end(payload=payload)
+                event.on_end()
 
     @contextmanager
     def as_trace(self, trace_id: str) -> Generator[None, None, None]:
