@@ -42,16 +42,12 @@ def split_by_sentence_tokenizer() -> Callable[[str], List[str]]:
     # instead of using end, use the start of the next span if available
     def split(text: str) -> List[str]:
         spans = list(tokenizer.span_tokenize(text))
-        sentences = []
-        for i, span in enumerate(spans):
-            start = span[0]
-            if i < len(spans) - 1:
-                end = spans[i + 1][0]
-            else:
-                end = len(text)
-            sentences.append(text[start:end])
-
-        return sentences
+        if not spans:
+            return []
+        # Use zip with list comprehension for better performance
+        start_positions = [span[0] for span in spans]
+        end_positions = start_positions[1:] + [len(text)]
+        return [text[start:end] for start, end in zip(start_positions, end_positions)]
 
     return split
 
