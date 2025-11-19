@@ -22,6 +22,7 @@ from llama_index.core.base.response.schema import Response
 from llama_index.core.bridge.pydantic import BaseModel, Field
 from llama_index.core.callbacks.base import CallbackManager
 from llama_index.core.schema import NodeWithScore, QueryBundle, TextNode
+from functools import lru_cache
 
 ## Define common types used throughout these components
 StringableInput = Union[
@@ -38,30 +39,38 @@ StringableInput = Union[
 
 def validate_and_convert_stringable(input: Any) -> str:
     # special handling for generator
+    # Pre-fetch types for fast isinstance checks
+    stringable_types = _stringable_types()
+    chat_or_completion = (ChatResponse, CompletionResponse)
+    # special handling for generator
     if isinstance(input, Generator):
-        # iterate through each element, make sure is stringable
-        new_input = ""
+        # Build output using list then join for performance
+        parts = []
         for elem in input:
-            if not isinstance(elem, get_args(StringableInput)):
+            if not isinstance(elem, stringable_types):
                 raise ValueError(f"Input {elem} is not stringable.")
-            elif isinstance(elem, (ChatResponse, CompletionResponse)):
-                new_input += cast(str, elem.delta)
+            elif isinstance(elem, chat_or_completion):
+                parts.append(cast(str, elem.delta))
             else:
-                new_input += str(elem)
-        return new_input
-    elif isinstance(input, List):
-        # iterate through each element, make sure is stringable
-        # do this recursively
-        new_input_list = []
-        for elem in input:
-            new_input_list.append(validate_and_convert_stringable(elem))
-        return str(new_input_list)
+                parts.append(str(elem))
+        return "".join(parts)
+    elif isinstance(input, list):
+        # Build everything into a new list and str() the list, not each element
+        # Use a list comprehension for speed
+        return str([validate_and_convert_stringable(elem) for elem in input])
     elif isinstance(input, ChatResponse):
         return input.message.content or ""
-    elif isinstance(input, get_args(StringableInput)):
+    elif isinstance(input, stringable_types):
         return str(input)
     else:
         raise ValueError(f"Input {input} is not stringable.")
+
+
+@lru_cache(maxsize=1)
+def _stringable_types():
+    # Import here to avoid circular import and only pay the cost once at runtime
+    from llama_index.core.base.query_pipeline.query import StringableInput
+    return get_args(StringableInput)
 
 
 class InputKeys(BaseModel):
