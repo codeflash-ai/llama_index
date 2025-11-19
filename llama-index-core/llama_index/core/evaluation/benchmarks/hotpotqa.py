@@ -16,6 +16,10 @@ from llama_index.core.query_engine.retriever_query_engine import (
 from llama_index.core.schema import NodeWithScore, QueryBundle, TextNode
 from llama_index.core.utils import get_cache_dir
 
+_ARTICLES_RE = re.compile(r"\b(a|an|the)\b")
+
+_PUNCT_TRANS = str.maketrans('', '', string.punctuation)
+
 DEV_DISTRACTOR_URL = """http://curtis.ml.cmu.edu/datasets/\
 hotpot/hotpot_dev_distractor_v1.json"""
 
@@ -164,20 +168,11 @@ Utils from https://github.com/hotpotqa/hotpot/blob/master/hotpot_evaluate_v1.py
 
 
 def normalize_answer(s: str) -> str:
-    def remove_articles(text: str) -> str:
-        return re.sub(r"\b(a|an|the)\b", " ", text)
-
-    def white_space_fix(text: str) -> str:
-        return " ".join(text.split())
-
-    def remove_punc(text: str) -> str:
-        exclude = set(string.punctuation)
-        return "".join(ch for ch in text if ch not in exclude)
-
-    def lower(text: str) -> str:
-        return text.lower()
-
-    return white_space_fix(remove_articles(remove_punc(lower(s))))
+    s = s.lower()
+    s = s.translate(_PUNCT_TRANS)
+    s = _ARTICLES_RE.sub(' ', s)
+    s = " ".join(s.split())
+    return s
 
 
 def f1_score(prediction: str, ground_truth: str) -> Tuple[float, float, float]:
@@ -199,6 +194,13 @@ def f1_score(prediction: str, ground_truth: str) -> Tuple[float, float, float]:
 
     prediction_tokens = normalized_prediction.split()
     ground_truth_tokens = normalized_ground_truth.split()
+    if not prediction_tokens or not ground_truth_tokens:
+        return ZERO_METRIC
+
+    # Use local function and minimze Counter objects for intersection
+    # Counter(a) & Counter(b) is efficient, but for shorter inputs, a dict-based approach is faster.
+    # But since inputs may have repeated tokens, Counter intersection is needed.
+
     common = Counter(prediction_tokens) & Counter(ground_truth_tokens)
     num_same = sum(common.values())
     if num_same == 0:
