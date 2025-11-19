@@ -114,5 +114,6 @@ class FeedbackQueryTransformation(BaseQueryTransform):
                 response=response,
                 feedback=feedback,
             )
-            logger.debug("Resynthesized query: %s", new_query_str)
+            if logger.isEnabledFor(10):  # logging.DEBUG == 10
+                logger.debug("Resynthesized query: %s", new_query_str)
             return new_query_str
