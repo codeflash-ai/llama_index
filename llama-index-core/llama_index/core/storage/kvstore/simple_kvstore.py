@@ -65,11 +65,11 @@ class SimpleKVStore(BaseInMemoryKVStore):
 
     def delete(self, key: str, collection: str = DEFAULT_COLLECTION) -> bool:
         """Delete a value from the store."""
-        try:
-            self._data[collection].pop(key)
+        collection_dict = self._data.get(collection)
+        if collection_dict is not None and key in collection_dict:
+            del collection_dict[key]
             return True
-        except KeyError:
-            return False
+        return False
 
     async def adelete(self, key: str, collection: str = DEFAULT_COLLECTION) -> bool:
         """Delete a value from the store."""

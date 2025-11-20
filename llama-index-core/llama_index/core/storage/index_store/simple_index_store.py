@@ -64,8 +64,7 @@ class SimpleIndexStore(KVIndexStore):
 
     @classmethod
     def from_dict(cls, save_dict: dict) -> "SimpleIndexStore":
-        simple_kvstore = SimpleKVStore.from_dict(save_dict)
-        return cls(simple_kvstore)
+        return cls(SimpleKVStore(save_dict))
 
     def to_dict(self) -> dict:
         assert isinstance(self._kvstore, SimpleKVStore)
