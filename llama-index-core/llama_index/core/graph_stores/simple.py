@@ -80,13 +80,16 @@ class SimpleGraphStore(GraphStore):
 
     def __init__(
         self,
-        data: Optional[SimpleGraphStoreData] = None,
+        data: Optional['SimpleGraphStoreData'] = None,
         fs: Optional[fsspec.AbstractFileSystem] = None,
         **kwargs: Any,
     ) -> None:
         """Initialize params."""
         self._data = data or SimpleGraphStoreData()
         self._fs = fs or fsspec.filesystem("file")
+
+        # Cache a reference to the dict to save attribute lookups in get()
+        self._graph_dict = self._data.graph_dict
 
     @classmethod
     def from_persist_dir(
@@ -107,7 +110,8 @@ class SimpleGraphStore(GraphStore):
 
     def get(self, subj: str) -> List[List[str]]:
         """Get triplets."""
-        return self._data.graph_dict.get(subj, [])
+        # Use cached dict reference for faster attribute access
+        return self._graph_dict.get(subj, [])
 
     def get_rel_map(
         self, subjs: Optional[List[str]] = None, depth: int = 2, limit: int = 30
