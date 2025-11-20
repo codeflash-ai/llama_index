@@ -54,16 +54,12 @@ class AutoMergingRetriever(BaseRetriever):
         parent_nodes: Dict[str, BaseNode] = {}
         parent_cur_children_dict: Dict[str, List[NodeWithScore]] = defaultdict(list)
         for node in nodes:
-            if node.node.parent_node is None:
+            parent_info = node.node.parent_node
+            if parent_info is None:
                 continue
-            parent_node_info = node.node.parent_node
-
-            # Fetch actual parent node if doesn't exist in `parent_nodes` cache yet
-            parent_node_id = parent_node_info.node_id
+            parent_node_id = parent_info.node_id
             if parent_node_id not in parent_nodes:
-                parent_node = self._storage_context.docstore.get_document(
-                    parent_node_id
-                )
+                parent_node = self._storage_context.docstore.get_document(parent_node_id)
                 parent_nodes[parent_node_id] = cast(BaseNode, parent_node)
 
             # add reference to child from parent
@@ -72,7 +68,9 @@ class AutoMergingRetriever(BaseRetriever):
         # compute ratios and "merge" nodes
         # merging: delete some children nodes, add some parent nodes
         node_ids_to_delete = set()
-        nodes_to_add: Dict[str, BaseNode] = {}
+        nodes_to_add: Dict[str, NodeWithScore] = {}
+
+        # Second pass: Compute merge and decide on deletions/additions
         for parent_node_id, parent_node in parent_nodes.items():
             parent_child_nodes = parent_node.child_nodes
             parent_num_children = len(parent_child_nodes) if parent_child_nodes else 1
@@ -81,9 +79,7 @@ class AutoMergingRetriever(BaseRetriever):
 
             # if ratio is high enough, merge
             if ratio > self._simple_ratio_thresh:
-                node_ids_to_delete.update(
-                    set({n.node.node_id for n in parent_cur_children})
-                )
+                node_ids_to_delete.update(n.node.node_id for n in parent_cur_children)
 
                 parent_node_text = truncate_text(parent_node.text, 100)
                 info_str = (
@@ -95,23 +91,24 @@ class AutoMergingRetriever(BaseRetriever):
                 if self._verbose:
                     print(info_str)
 
-                # add parent node
-                # can try averaging score across embeddings for now
-
-                avg_score = sum(
-                    [n.get_score() or 0.0 for n in parent_cur_children]
-                ) / len(parent_cur_children)
+                avg_score = (
+                    sum(n.get_score() or 0.0 for n in parent_cur_children)
+                    / len(parent_cur_children)
+                )
                 parent_node_with_score = NodeWithScore(
                     node=parent_node, score=avg_score
                 )
                 nodes_to_add[parent_node_id] = parent_node_with_score
 
-        # delete old child nodes, add new parent nodes
-        new_nodes = [n for n in nodes if n.node.node_id not in node_ids_to_delete]
-        # add parent nodes
-        new_nodes.extend(list(nodes_to_add.values()))
+        # List construction using a set-lookup for higher performance with many nodes
+        if node_ids_to_delete:
+            new_nodes = [n for n in nodes if n.node.node_id not in node_ids_to_delete]
+            new_nodes.extend(nodes_to_add.values())
+            is_changed = True
+        else:
+            new_nodes = nodes
+            is_changed = False
 
-        is_changed = len(node_ids_to_delete) > 0
 
         return new_nodes, is_changed
 
@@ -119,37 +116,39 @@ class AutoMergingRetriever(BaseRetriever):
         self, nodes: List[NodeWithScore]
     ) -> Tuple[List[NodeWithScore], bool]:
         """Fill in nodes."""
-        new_nodes = []
+        new_nodes: List[NodeWithScore] = []
+        nodes_len = len(nodes)
         is_changed = False
-        for idx, node in enumerate(nodes):
+
+        idx = 0
+        while idx < nodes_len:
+            node = nodes[idx]
             new_nodes.append(node)
-            if idx >= len(nodes) - 1:
-                continue
+            if idx < nodes_len - 1:
+                cur_node = cast(BaseNode, node.node)
+                next_expected_node = cur_node.next_node
+                next_actual_node = nodes[idx + 1].node.prev_node
+                if (
+                    next_expected_node is not None
+                    and next_expected_node == next_actual_node
+                ):
+                    is_changed = True
+                    next_node = self._storage_context.docstore.get_document(
+                        next_expected_node.node_id
+                    )
+                    next_node = cast(BaseNode, next_node)
+                    next_node_text = truncate_text(next_node.get_text(), 100)
+                    info_str = (
+                        f"> Filling in node. Node id: {next_expected_node.node_id}"
+                        f"> Node text: {next_node_text}\n"
+                    )
+                    logger.info(info_str)
+                    if self._verbose:
+                        print(info_str)
+                    avg_score = (node.get_score() + nodes[idx + 1].get_score()) / 2
+                    new_nodes.append(NodeWithScore(node=next_node, score=avg_score))
+            idx += 1
 
-            cur_node = cast(BaseNode, node.node)
-            # if there's a node in the middle, add that to the queue
-            if (
-                cur_node.next_node is not None
-                and cur_node.next_node == nodes[idx + 1].node.prev_node
-            ):
-                is_changed = True
-                next_node = self._storage_context.docstore.get_document(
-                    cur_node.next_node.node_id
-                )
-                next_node = cast(BaseNode, next_node)
-
-                next_node_text = truncate_text(next_node.get_text(), 100)
-                info_str = (
-                    f"> Filling in node. Node id: {cur_node.next_node.node_id}"
-                    f"> Node text: {next_node_text}\n"
-                )
-                logger.info(info_str)
-                if self._verbose:
-                    print(info_str)
-
-                # set score to be average of current node and next node
-                avg_score = (node.get_score() + nodes[idx + 1].get_score()) / 2
-                new_nodes.append(NodeWithScore(node=next_node, score=avg_score))
         return new_nodes, is_changed
 
     def _try_merging(
