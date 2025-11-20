@@ -73,7 +73,9 @@ class BaseEmbedding(TransformComponent):
         cls, v: Optional[CallbackManager]
     ) -> CallbackManager:
         if v is None:
-            return CallbackManager([])
+            if not hasattr(cls, "_default_callback_manager"):
+                cls._default_callback_manager = CallbackManager([])
+            return cls._default_callback_manager
         return v
 
     @abstractmethod
