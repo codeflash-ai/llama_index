@@ -1,20 +1,21 @@
 """Utilities for GPT indices."""
 import logging
 import re
+from typing import Dict, List, Optional, Sequence, Set, Tuple
+
 from llama_index.core.base.embeddings.base import BaseEmbedding
 from llama_index.core.embeddings.multi_modal_base import MultiModalEmbedding
 from llama_index.core.schema import BaseNode, ImageNode, MetadataMode
 from llama_index.core.utils import globals_helper, truncate_text
 from llama_index.core.vector_stores.types import VectorStoreQueryResult
-from typing import Dict, List, Optional, Sequence, Set, Tuple
 
 _logger = logging.getLogger(__name__)
 
 
 def get_sorted_node_list(node_dict: Dict[int, BaseNode]) -> List[BaseNode]:
     """Get sorted node list. Used by tree-strutured indices."""
-    sorted_indices = sorted(node_dict.keys())
-    return [node_dict[index] for index in sorted_indices]
+    # Combine sorting and value extraction for optimal performance
+    return [node_dict[index] for index in sorted(node_dict)]
 
 
 def extract_numbers_given_response(response: str, n: int = 1) -> Optional[List[int]]:
