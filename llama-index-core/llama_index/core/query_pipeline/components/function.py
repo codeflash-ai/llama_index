@@ -57,11 +57,13 @@ class FnComponent(QueryComponent):
     ) -> None:
         """Initialize."""
         # determine parameters
-        default_req_params, default_opt_params = get_parameters(fn)
-        if req_params is None:
-            req_params = default_req_params
-        if opt_params is None:
-            opt_params = default_opt_params
+        if req_params is None or opt_params is None:
+            default_req_params, default_opt_params = get_parameters(fn)
+            if req_params is None:
+                req_params = default_req_params
+            if opt_params is None:
+                opt_params = default_opt_params
+
 
         self._req_params = req_params
         self._opt_params = opt_params
@@ -76,16 +78,15 @@ class FnComponent(QueryComponent):
 
     def _validate_component_inputs(self, input: Dict[str, Any]) -> Dict[str, Any]:
         """Validate component inputs during run_component."""
-        # check that all required parameters are present
-        missing_params = self._req_params - set(input.keys())
+        input_keys = set(input)
+        missing_params = self._req_params - input_keys
         if missing_params:
             raise ValueError(
                 f"Missing required parameters: {missing_params}. "
                 f"Input keys: {input.keys()}"
             )
 
-        # check that no extra parameters are present
-        extra_params = set(input.keys()) - self._req_params - self._opt_params
+        extra_params = input_keys - self._req_params - self._opt_params
         if extra_params:
             raise ValueError(
                 f"Extra parameters: {extra_params}. " f"Input keys: {input.keys()}"
