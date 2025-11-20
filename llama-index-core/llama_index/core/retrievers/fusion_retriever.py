@@ -83,7 +83,7 @@ class QueryFusionRetriever(BaseRetriever):
         if self._verbose:
             queries_str = "\n".join(queries)
             print(f"Generated queries:\n{queries_str}")
-        return response.text.split("\n")
+        return queries
 
     def _reciprocal_rerank_fusion(
         self, results: Dict[Tuple[str, int], List[NodeWithScore]]
