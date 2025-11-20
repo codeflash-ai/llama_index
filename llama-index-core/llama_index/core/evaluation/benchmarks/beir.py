@@ -30,20 +30,22 @@ class BeirEvaluator:
 
         dataset_paths = {}
         for dataset in datasets:
-            dataset_full_path = os.path.join(cache_dir, "datasets", "BeIR__" + dataset)
+            dataset_full_path = os.path.join(cache_dir, "datasets", f"BeIR__{dataset}")
             if not os.path.exists(dataset_full_path):
-                url = f"""https://public.ukp.informatik.tu-darmstadt.de/thakur\
-/BEIR/datasets/{dataset}.zip"""
+                url = (
+                    f"https://public.ukp.informatik.tu-darmstadt.de/thakur"
+                    f"/BEIR/datasets/{dataset}.zip"
+                )
                 try:
                     util.download_and_unzip(url, dataset_full_path)
                 except Exception as e:
                     print(
-                        "Dataset:", dataset, "not found at:", url, "Removing cached dir"
+                        f"Dataset: {dataset} not found at: {url} Removing cached dir"
                     )
                     rmtree(dataset_full_path)
                     raise ValueError(f"invalid BEIR dataset: {dataset}") from e
 
-            print("Dataset:", dataset, "downloaded at:", dataset_full_path)
+            print(f"Dataset: {dataset} downloaded at: {dataset_full_path}")
             dataset_paths[dataset] = os.path.join(dataset_full_path, dataset)
         return dataset_paths
 
