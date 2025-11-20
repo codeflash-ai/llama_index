@@ -26,7 +26,9 @@ class SimpleKVStore(BaseInMemoryKVStore):
         data: Optional[DATA_TYPE] = None,
     ) -> None:
         """Init a SimpleKVStore."""
-        self._data: DATA_TYPE = data or {}
+        # Avoid using 'or {}', which creates a new dict if data is falsy (including empty dict).
+        # Instead, only create a new dict if data is explicitly None.
+        self._data: DATA_TYPE = {} if data is None else data
 
     def put(self, key: str, val: dict, collection: str = DEFAULT_COLLECTION) -> None:
         """Put a key-value pair into the store."""
@@ -65,11 +67,11 @@ class SimpleKVStore(BaseInMemoryKVStore):
 
     def delete(self, key: str, collection: str = DEFAULT_COLLECTION) -> bool:
         """Delete a value from the store."""
-        try:
-            self._data[collection].pop(key)
+        collection_dict = self._data.get(collection)
+        if collection_dict is not None and key in collection_dict:
+            del collection_dict[key]
             return True
-        except KeyError:
-            return False
+        return False
 
     async def adelete(self, key: str, collection: str = DEFAULT_COLLECTION) -> bool:
         """Delete a value from the store."""
@@ -105,4 +107,5 @@ class SimpleKVStore(BaseInMemoryKVStore):
     @classmethod
     def from_dict(cls, save_dict: dict) -> "SimpleKVStore":
         """Load a SimpleKVStore from dict."""
+        # Avoid unnecessary work; pass dict directly.
         return cls(save_dict)
