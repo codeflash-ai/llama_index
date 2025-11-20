@@ -4,6 +4,11 @@ import re
 from pathlib import Path
 from typing import Dict, List, Tuple
 
+_HUB_DOWNLOADS_REGEX = re.compile(
+    r"download_loader\([\"']([A-Za-z]+)[\"'][\sA-Za-z_=]*\)"
+    r"|download_tool\([\"']([A-Za-z]+)[\"'][A-Za-z\s_=]*\)"
+)
+
 mappings_path = os.path.join(os.path.dirname(__file__), "mappings.json")
 
 
@@ -92,8 +97,8 @@ def _parse_hub_downloads(
     installed_modules: List[str],
     line: str,
 ):
-    regex = r"download_loader\([\"']([A-Z,a-z]+)[\"'][\s,a-z,A-Z,_=]*\)|download_tool\([\"']([a-z,A-Z]+)[\"'][A-Z,a-z,\s,_=]*\)"
-    result = re.search(regex, line)
+    # Use precompiled regex pattern for better performance.
+    result = _HUB_DOWNLOADS_REGEX.search(line)
     new_lines = []
     new_installs = []
     if result:
