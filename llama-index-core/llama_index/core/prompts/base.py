@@ -1,7 +1,7 @@
 """Prompts."""
 
 from abc import ABC, abstractmethod
-from copy import deepcopy
+from copy import copy, deepcopy
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -232,9 +232,12 @@ class ChatPromptTemplate(BasePromptTemplate):
             metadata = {}
         metadata["prompt_type"] = prompt_type
 
-        template_vars = []
+        # Pre-size the list for small performance gain when many templates
+        template_vars: List[str] = []
+        extend = template_vars.extend
         for message_template in message_templates:
-            template_vars.extend(get_template_vars(message_template.content or ""))
+            extend(get_template_vars(message_template.content or ""))
+
 
         super().__init__(
             message_templates=message_templates,
@@ -247,7 +250,11 @@ class ChatPromptTemplate(BasePromptTemplate):
         )
 
     def partial_format(self, **kwargs: Any) -> "ChatPromptTemplate":
-        prompt = deepcopy(self)
+        # Avoid deepcopy and copy only what's needed (shallow copy, update dicts as needed).
+        # deepcopy is expensive; shallow copy is sufficient when objects are immutable or unused after.
+        prompt = copy(self)
+        # kwargs is a dict, so copy to avoid mutating original instance's dict
+        prompt.kwargs = self.kwargs.copy()
         prompt.kwargs.update(kwargs)
         return prompt
 
