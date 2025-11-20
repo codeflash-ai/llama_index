@@ -60,7 +60,6 @@ def json_schema_to_guidance_output_template(
         blob/main/notebooks/applications/jsonformer.ipynb
     Modified to support nested pydantic models.
     """
-    out = ""
     if "type" not in schema and "$ref" in schema:
         if root is None:
             raise ValueError("Must specify root schema for nested object")
@@ -71,51 +70,57 @@ def json_schema_to_guidance_output_template(
             root["definitions"][model], key, indent, root
         )
 
-    if schema["type"] == "object":
-        out += "  " * indent + "{\n"
-        for k, v in schema["properties"].items():
-            out += (
-                "  " * (indent + 1)
-                + f'"{k}"'
-                + ": "
-                + json_schema_to_guidance_output_template(v, k, indent + 1, root)
-                + ",\n"
-            )
-        out += "  " * indent + "}"
-        return out
-    elif schema["type"] == "array":
+    schema_type = schema["type"]
+
+    if schema_type == "object":
+        # Preallocate and join for large objects; faster than repeated string concat
+        prop_items = schema["properties"].items()
+        ind = "  " * indent
+        ind_inner = "  " * (indent + 1)
+        parts = [f'{ind}{{\n']
+        for k, v in prop_items:
+            gen = json_schema_to_guidance_output_template(v, k, indent + 1, root)
+            parts.append(f'{ind_inner}"{k}": {gen},\n')
+        parts.append(f"{ind}}}")
+        return ''.join(parts)
+
+    elif schema_type == "array":
         if key is None:
             raise ValueError("Key should not be None")
-        if "max_items" in schema:
-            extra_args = f" max_iterations={schema['max_items']}"
-        else:
-            extra_args = ""
+        extra_args = (
+            f" max_iterations={schema['max_items']}" if "max_items" in schema else ""
+        )
+        inner = json_schema_to_guidance_output_template(schema["items"], "this", 0, root)
+        # Avoid plus-by-plus string concat
         return (
             "[{{#geneach '"
-            + key
-            + "' stop=']'"
-            + extra_args
-            + "}}{{#unless @first}}, {{/unless}}"
-            + json_schema_to_guidance_output_template(schema["items"], "this", 0, root)
-            + "{{/geneach}}]"
+            f"{key}' stop=']'"  # f-string here is faster/cleaner
+            f"{extra_args}"
+            "}}{{#unless @first}}, {{/unless}}"
+            f"{inner}"
+            "{{/geneach}}]"
         )
-    elif schema["type"] == "string":
+
+    elif schema_type == "string":
         if key is None:
             raise ValueError("key should not be None")
-        return "\"{{gen '" + key + "' stop='\"'}}\""
-    elif schema["type"] in ["integer", "number"]:
+        return f"\"{{{{gen '{key}' stop='\"'}}}}\""
+
+    elif schema_type in ("integer", "number"):
         if key is None:
             raise ValueError("key should not be None")
         if use_pattern_control:
-            return "{{gen '" + key + "' pattern='[0-9\\.]' stop=','}}"
+            # One f-string, formatting escape directly for best perf/readability
+            return f"{{{{gen '{key}' pattern='[0-9\\.]' stop=','}}}}"
         else:
-            return "\"{{gen '" + key + "' stop='\"'}}\""
-    elif schema["type"] == "boolean":
+            return f"\"{{{{gen '{key}' stop='\"'}}}}\""
+
+    elif schema_type == "boolean":
         if key is None:
             raise ValueError("key should not be None")
-        return "{{#select '" + key + "'}}True{{or}}False{{/select}}"
+        return f"{{{{#select '{key}'}}}}True{{{{or}}}}False{{{{/select}}}}"
+
     else:
-        schema_type = schema["type"]
         raise ValueError(f"Unknown schema type {schema_type}")
 
 
