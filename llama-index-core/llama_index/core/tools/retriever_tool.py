@@ -44,7 +44,7 @@ class RetrieverTool(AsyncBaseTool):
         description = description or DEFAULT_DESCRIPTION
 
         metadata = ToolMetadata(name=name, description=description)
-        return cls(retriever=retriever, metadata=metadata)
+        return cls(retriever, metadata)
 
     @property
     def retriever(self) -> BaseRetriever:
