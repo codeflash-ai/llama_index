@@ -158,7 +158,22 @@ class TokenTextSplitter(MetadataAwareTextSplitter):
 
         NOTE: the splits contain the separators.
         """
-        if len(self._tokenizer(text)) <= chunk_size:
+
+        # Cache tokenizer locally to avoid attribute lookup in hot loop
+        tokenizer = self._tokenizer
+
+        # Avoid repeated tokenization for same string by caching just in this call chain
+        _token_cache = {}
+
+        def get_token_len(txt: str) -> int:
+            if txt in _token_cache:
+                return _token_cache[txt]
+            res = len(tokenizer(txt))
+            _token_cache[txt] = res
+            return res
+
+        txt_len = get_token_len(text)
+        if txt_len <= chunk_size:
             return [text]
 
         for split_fn in self._split_fns:
@@ -167,13 +182,17 @@ class TokenTextSplitter(MetadataAwareTextSplitter):
                 break
 
         new_splits = []
+        append_split = new_splits.append
+        extend_splits = new_splits.extend
+
+        # Optimize use of get_token_len caching and local variables in inner loop
         for split in splits:
-            split_len = len(self._tokenizer(split))
+            split_len = get_token_len(split)
             if split_len <= chunk_size:
-                new_splits.append(split)
+                append_split(split)
             else:
                 # recursively split
-                new_splits.extend(self._split(split, chunk_size=chunk_size))
+                extend_splits(self._split(split, chunk_size=chunk_size))
         return new_splits
 
     def _merge(self, splits: List[str], chunk_size: int) -> List[str]:
