@@ -8,6 +8,10 @@ from llama_index.core.utils import globals_helper, truncate_text
 from llama_index.core.vector_stores.types import VectorStoreQueryResult
 from typing import Dict, List, Optional, Sequence, Set, Tuple
 
+_WORD_PATTERN = re.compile(r"\w+")
+
+_STOPWORDS = globals_helper.stopwords
+
 _logger = logging.getLogger(__name__)
 
 
@@ -35,9 +39,10 @@ def expand_tokens_with_subtokens(tokens: Set[str]) -> Set[str]:
     results = set()
     for token in tokens:
         results.add(token)
-        sub_tokens = re.findall(r"\w+", token)
+        sub_tokens = _WORD_PATTERN.findall(token)
         if len(sub_tokens) > 1:
-            results.update({w for w in sub_tokens if w not in globals_helper.stopwords})
+            # Use generator in update to avoid unnecessary set creation
+            results.update(w for w in sub_tokens if w not in _STOPWORDS)
 
     return results
 
