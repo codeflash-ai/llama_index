@@ -153,7 +153,9 @@ class BaseDocumentStore(ABC):
             raise_error (bool): raise error if node_id not found
 
         """
-        return [self.get_node(node_id, raise_error=raise_error) for node_id in node_ids]
+        # Cache method lookup for tight loop performance
+        get_node = self.get_node
+        return [get_node(node_id, raise_error=raise_error) for node_id in node_ids]
 
     async def aget_nodes(
         self, node_ids: List[str], raise_error: bool = True

@@ -21,6 +21,7 @@ from llama_index.core.prompts.default_prompts import DEFAULT_CHOICE_SELECT_PROMP
 from llama_index.core.schema import NodeWithScore, QueryBundle
 from llama_index.core.settings import Settings
 from llama_index.core.vector_stores.types import VectorStoreQuery
+import heapq
 
 logger = logging.getLogger(__name__)
 
@@ -84,18 +85,26 @@ class DocumentSummaryIndexLLMRetriever(BaseRetriever):
 
         all_summary_ids: List[str] = []
         all_relevances: List[float] = []
+        get_nodes = self._index.docstore.get_nodes
+        summary_id_to_node_ids = self._index.index_struct.summary_id_to_node_ids
+        _llm_predict = self._llm.predict
+        _choice_select_prompt = self._choice_select_prompt
+        _format_node_batch_fn = self._format_node_batch_fn
+        _parse_choice_select_answer_fn = self._parse_choice_select_answer_fn
+
+        query_str = query_bundle.query_str
+
         for idx in range(0, len(summary_ids), self._choice_batch_size):
             summary_ids_batch = summary_ids[idx : idx + self._choice_batch_size]
-            summary_nodes = self._index.docstore.get_nodes(summary_ids_batch)
-            query_str = query_bundle.query_str
-            fmt_batch_str = self._format_node_batch_fn(summary_nodes)
+            summary_nodes = get_nodes(summary_ids_batch)
+            fmt_batch_str = _format_node_batch_fn(summary_nodes)
             # call each batch independently
-            raw_response = self._llm.predict(
-                self._choice_select_prompt,
+            raw_response = _llm_predict(
+                _choice_select_prompt,
                 context_str=fmt_batch_str,
                 query_str=query_str,
             )
-            raw_choices, relevances = self._parse_choice_select_answer_fn(
+            raw_choices, relevances = _parse_choice_select_answer_fn(
                 raw_response, len(summary_nodes)
             )
             choice_idxs = [choice - 1 for choice in raw_choices]
@@ -105,14 +114,18 @@ class DocumentSummaryIndexLLMRetriever(BaseRetriever):
             all_summary_ids.extend(choice_summary_ids)
             all_relevances.extend(relevances)
 
-        zipped_list = list(zip(all_summary_ids, all_relevances))
-        sorted_list = sorted(zipped_list, key=lambda x: x[1], reverse=True)
-        top_k_list = sorted_list[: self._choice_top_k]
+        # Get the top_k by relevance using heapq.nlargest for efficiency
+        if all_summary_ids:
+            zipped_list = zip(all_summary_ids, all_relevances)
+            top_k_list = heapq.nlargest(self._choice_top_k, zipped_list, key=lambda x: x[1])
+        else:
+            top_k_list = []
+
 
         results = []
         for summary_id, relevance in top_k_list:
-            node_ids = self._index.index_struct.summary_id_to_node_ids[summary_id]
-            nodes = self._index.docstore.get_nodes(node_ids)
+            node_ids = summary_id_to_node_ids[summary_id]
+            nodes = get_nodes(node_ids)
             results.extend([NodeWithScore(node=n, score=relevance) for n in nodes])
 
         return results
