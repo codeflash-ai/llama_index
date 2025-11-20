@@ -55,9 +55,16 @@ class MultiStepQueryEngine(BaseQueryEngine):
     ) -> None:
         self._query_engine = query_engine
         self._query_transform = query_transform
-        self._response_synthesizer = response_synthesizer or get_response_synthesizer(
-            callback_manager=self._query_engine.callback_manager
-        )
+        # Cache the synthesizer if not provided, keeping call count to minimum
+        if response_synthesizer is not None:
+            self._response_synthesizer = response_synthesizer
+        else:
+            # Only call get_response_synthesizer if absolutely needed (avoid repeated fp lookups)
+            synthesizer = get_response_synthesizer(
+                callback_manager=self._query_engine.callback_manager
+            )
+            self._response_synthesizer = synthesizer
+
 
         self._index_summary = index_summary
         self._num_steps = num_steps
@@ -71,12 +78,16 @@ class MultiStepQueryEngine(BaseQueryEngine):
         callback_manager = self._query_engine.callback_manager
         super().__init__(callback_manager)
 
-    def _get_prompt_modules(self) -> PromptMixinType:
-        """Get prompt sub-modules."""
-        return {
+        # Pre-allocate the prompt module dict (static in this class, so best to keep the same object)
+        self._prompt_modules: PromptMixinType = {
             "response_synthesizer": self._response_synthesizer,
             "query_transform": self._query_transform,
         }
+
+    def _get_prompt_modules(self) -> PromptMixinType:
+        """Get prompt sub-modules."""
+        # Return the cached dictionary instead of constructing one each call
+        return self._prompt_modules
 
     def _query(self, query_bundle: QueryBundle) -> RESPONSE_TYPE:
         with self.callback_manager.event(
