@@ -66,14 +66,17 @@ class IndexGraph(IndexStruct):
         children_nodes: Optional[Sequence[BaseNode]] = None,
     ) -> None:
         """Insert node."""
-        index = index or self.size
+        # Directly use parameter index if provided, otherwise fallback to self.size
+        idx = index if index is not None else self.size
         node_id = node.node_id
+        self.all_nodes[idx] = node_id
 
-        self.all_nodes[index] = node_id
-
-        if children_nodes is None:
-            children_nodes = []
-        children_ids = [n.node_id for n in children_nodes]
+        # Avoid repeatedly creating new lists if children_nodes is None
+        if children_nodes:
+            # Use generator expression for less overhead
+            children_ids = [n.node_id for n in children_nodes]
+        else:
+            children_ids = []
         self.node_id_to_children_ids[node_id] = children_ids
 
     def get_children(self, parent_node: Optional[BaseNode]) -> Dict[int, str]:
