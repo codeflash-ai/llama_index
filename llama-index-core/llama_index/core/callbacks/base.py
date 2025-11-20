@@ -7,12 +7,8 @@ from contextvars import ContextVar
 from typing import Any, Dict, Generator, List, Optional, cast
 
 from llama_index.core.callbacks.base_handler import BaseCallbackHandler
-from llama_index.core.callbacks.schema import (
-    BASE_TRACE_EVENT,
-    LEAF_EVENTS,
-    CBEventType,
-    EventPayload,
-)
+from llama_index.core.callbacks.schema import (BASE_TRACE_EVENT, LEAF_EVENTS,
+                                               CBEventType, EventPayload)
 
 logger = logging.getLogger(__name__)
 global_stack_trace = ContextVar("trace", default=[BASE_TRACE_EVENT])
@@ -180,25 +176,9 @@ class CallbackManager(BaseCallbackHandler, ABC):
             if not event.finished:
                 event.on_end(payload=payload)
 
-    @contextmanager
     def as_trace(self, trace_id: str) -> Generator[None, None, None]:
         """Context manager tracer for lanching and shutdown of traces."""
-        self.start_trace(trace_id=trace_id)
-
-        try:
-            yield
-        except Exception as e:
-            # event already added to trace?
-            if not hasattr(e, "event_added"):
-                self.on_event_start(
-                    CBEventType.EXCEPTION, payload={EventPayload.EXCEPTION: e}
-                )
-                e.event_added = True  # type: ignore
-
-            raise
-        finally:
-            # ensure trace is ended
-            self.end_trace(trace_id=trace_id)
+        return _TraceContextManager(self, trace_id)
 
     def start_trace(self, trace_id: Optional[str] = None) -> None:
         """Run when an overall trace is launched."""
@@ -240,6 +220,34 @@ class CallbackManager(BaseCallbackHandler, ABC):
     @property
     def trace_map(self) -> Dict[str, List[str]]:
         return self._trace_map
+
+
+class _TraceContextManager:
+    """Custom, faster context manager for as_trace."""
+
+    __slots__ = ("_manager", "_trace_id", "_entered")
+
+    def __init__(self, manager: "CallbackManager", trace_id: str) -> None:
+        self._manager = manager
+        self._trace_id = trace_id
+        self._entered = False
+
+    def __enter__(self) -> None:
+        self._manager.start_trace(trace_id=self._trace_id)
+        self._entered = True
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        try:
+            if exc_val is not None and not hasattr(exc_val, "event_added"):
+                self._manager.on_event_start(
+                    CBEventType.EXCEPTION, payload={EventPayload.EXCEPTION: exc_val}
+                )
+                exc_val.event_added = True  # type: ignore
+        finally:
+            # ensure trace is ended
+            self._manager.end_trace(trace_id=self._trace_id)
+        # propagate exception as usual
+        return False
 
 
 class EventContext:
