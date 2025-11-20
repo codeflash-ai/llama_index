@@ -44,8 +44,10 @@ def similarity(
     elif mode == SimilarityMode.DOT_PRODUCT:
         return np.dot(embedding1, embedding2)
     else:
-        product = np.dot(embedding1, embedding2)
-        norm = np.linalg.norm(embedding1) * np.linalg.norm(embedding2)
+        arr1 = np.asarray(embedding1, dtype=np.float64)
+        arr2 = np.asarray(embedding2, dtype=np.float64)
+        product = np.dot(arr1, arr2)
+        norm = np.linalg.norm(arr1) * np.linalg.norm(arr2)
         return product / norm
 
 
