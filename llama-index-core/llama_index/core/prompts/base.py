@@ -1,7 +1,7 @@
 """Prompts."""
 
 from abc import ABC, abstractmethod
-from copy import deepcopy
+from copy import copy, deepcopy
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -171,7 +171,8 @@ class PromptTemplate(BasePromptTemplate):
 
         # get function and fixed kwargs, and add that to a copy
         # of the current prompt object
-        prompt = deepcopy(self)
+        prompt = copy(self)
+        prompt.kwargs = self.kwargs.copy()
         prompt.kwargs.update(kwargs)
 
         # NOTE: put the output parser back
