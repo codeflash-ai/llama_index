@@ -36,10 +36,11 @@ class RetryQueryEngine(BaseQueryEngine):
         self._evaluator = evaluator
         self.max_retries = max_retries
         super().__init__(callback_manager)
+        self._prompt_modules = {"query_engine": self._query_engine, "evaluator": self._evaluator}
 
     def _get_prompt_modules(self) -> PromptMixinType:
         """Get prompt sub-modules."""
-        return {"query_engine": self._query_engine, "evaluator": self._evaluator}
+        return self._prompt_modules
 
     def _query(self, query_bundle: QueryBundle) -> RESPONSE_TYPE:
         """Answer a query."""
