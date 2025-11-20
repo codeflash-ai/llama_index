@@ -196,7 +196,6 @@ class LabelledEvaluatorDataset(BaseLlamaDataset[BaseEvaluator]):
         sleep_time_in_seconds: int = 0,
     ) -> EvaluatorExamplePrediction:
         """Predict RAG example with a query engine."""
-        time.sleep(sleep_time_in_seconds)
         try:
             eval_result: EvaluationResult = predictor.evaluate(
                 query=example.query,
