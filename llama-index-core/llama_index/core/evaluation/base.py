@@ -59,14 +59,28 @@ class BaseEvaluator(PromptMixin):
         Subclasses can override this method to provide custom evaluation logic and
         take in additional arguments.
         """
-        return asyncio.run(
-            self.aevaluate(
-                query=query,
-                response=response,
-                contexts=contexts,
-                **kwargs,
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            # Not running inside an event loop
+            return asyncio.run(
+                self.aevaluate(
+                    query=query,
+                    response=response,
+                    contexts=contexts,
+                    **kwargs,
+                )
             )
-        )
+        else:
+            # Already in an event loop; use run_until_complete safely on new future
+            return loop.run_until_complete(
+                self.aevaluate(
+                    query=query,
+                    response=response,
+                    contexts=contexts,
+                    **kwargs,
+                )
+            )
 
     @abstractmethod
     async def aevaluate(

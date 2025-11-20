@@ -382,8 +382,9 @@ class LabelledPairwiseEvaluatorDataset(BaseLlamaDataset[BaseEvaluator]):
         sleep_time_in_seconds: int = 0,
     ) -> PairwiseEvaluatorExamplePrediction:
         """Predict RAG example with a query engine."""
-        time.sleep(sleep_time_in_seconds)
         try:
+            if sleep_time_in_seconds:
+                time.sleep(sleep_time_in_seconds)
             eval_result: EvaluationResult = predictor.evaluate(
                 query=example.query,
                 response=example.answer,
