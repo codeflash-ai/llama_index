@@ -28,6 +28,7 @@ from llama_index.core.settings import (
     embed_model_from_settings_or_context,
     llm_from_settings_or_context,
 )
+from itertools import repeat
 
 logger = logging.getLogger(__name__)
 
@@ -196,33 +197,53 @@ class SummaryIndexLLMRetriever(BaseRetriever):
         """Retrieve nodes."""
         node_ids = self._index.index_struct.nodes
         results = []
-        for idx in range(0, len(node_ids), self._choice_batch_size):
-            node_ids_batch = node_ids[idx : idx + self._choice_batch_size]
-            nodes_batch = self._index.docstore.get_nodes(node_ids_batch)
+        docstore = self._index.docstore
+        batch_size = self._choice_batch_size
+        format_node_batch_fn = self._format_node_batch_fn
+        parse_choice_select_answer_fn = self._parse_choice_select_answer_fn
+        llm_predict = self._llm.predict
+        choice_select_prompt = self._choice_select_prompt
+
+        for idx in range(0, len(node_ids), batch_size):
+            node_ids_batch = node_ids[idx : idx + batch_size]
+
+            # Batch-fetch nodes only once per batch
+            nodes_batch = docstore.get_nodes(node_ids_batch)
+
+            fmt_batch_str = format_node_batch_fn(nodes_batch)
 
             query_str = query_bundle.query_str
-            fmt_batch_str = self._format_node_batch_fn(nodes_batch)
-            # call each batch independently
-            raw_response = self._llm.predict(
-                self._choice_select_prompt,
+
+            # Predict once per batch
+            raw_response = llm_predict(
+                choice_select_prompt,
                 context_str=fmt_batch_str,
                 query_str=query_str,
             )
 
-            raw_choices, relevances = self._parse_choice_select_answer_fn(
+            raw_choices, relevances = parse_choice_select_answer_fn(
                 raw_response, len(nodes_batch)
             )
+
+            if not raw_choices:
+                continue
+
+            # Precompute indices and node_ids for choices
             choice_idxs = [int(choice) - 1 for choice in raw_choices]
             choice_node_ids = [node_ids_batch[idx] for idx in choice_idxs]
 
-            choice_nodes = self._index.docstore.get_nodes(choice_node_ids)
-            relevances = relevances or [1.0 for _ in choice_nodes]
-            results.extend(
-                [
-                    NodeWithScore(node=node, score=relevance)
-                    for node, relevance in zip(choice_nodes, relevances)
-                ]
-            )
+            # Batch-fetch chosen nodes
+            if choice_node_ids:
+                choice_nodes = docstore.get_nodes(choice_node_ids)
+                if not relevances:
+                    relevances = list(repeat(1.0, len(choice_nodes)))
+                results.extend(
+                    (
+                        NodeWithScore(node=node, score=relevance)
+                        for node, relevance in zip(choice_nodes, relevances)
+                    )
+                )
+
         return results
 
 
