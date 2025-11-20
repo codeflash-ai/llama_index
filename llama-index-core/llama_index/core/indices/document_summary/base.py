@@ -92,13 +92,23 @@ class DocumentSummaryIndex(BaseIndex[IndexDocumentSummary]):
         **kwargs: Any,
     ) -> None:
         """Initialize params."""
-        self._llm = llm or llm_from_settings_or_context(Settings, service_context)
-        self._embed_model = embed_model or embed_model_from_settings_or_context(
-            Settings, service_context
+        # Avoid duplicate lookups for Settings/service_context
+        # Use local variables for llm/em embedding to avoid redundant accesses
+        llm_actual = llm if llm is not None else llm_from_settings_or_context(Settings, service_context)
+        embed_model_actual = (
+            embed_model if embed_model is not None else embed_model_from_settings_or_context(Settings, service_context)
         )
 
-        self._response_synthesizer = response_synthesizer or get_response_synthesizer(
-            llm=self._llm, response_mode=ResponseMode.TREE_SUMMARIZE
+        self._llm = llm_actual
+        self._embed_model = embed_model_actual
+
+        # Response synthesizer only needs llm and response mode
+        self._response_synthesizer = (
+            response_synthesizer
+            if response_synthesizer is not None
+            else get_response_synthesizer(
+                llm=llm_actual, response_mode=ResponseMode.TREE_SUMMARIZE
+            )
         )
         self._summary_query = summary_query
         self._embed_summaries = embed_summaries
@@ -129,28 +139,24 @@ class DocumentSummaryIndex(BaseIndex[IndexDocumentSummary]):
                 Defaults to DocumentSummaryRetrieverMode.EMBEDDING.
 
         """
-        from llama_index.core.indices.document_summary.retrievers import (
-            DocumentSummaryIndexEmbeddingRetriever,
-            DocumentSummaryIndexLLMRetriever,
-        )
-
-        LLMRetriever = DocumentSummaryIndexLLMRetriever
-        EmbeddingRetriever = DocumentSummaryIndexEmbeddingRetriever
 
         if retriever_mode == _RetrieverMode.EMBEDDING:
             if not self._embed_summaries:
                 raise ValueError(
                     "Cannot use embedding retriever if embed_summaries is False"
                 )
-
-            return EmbeddingRetriever(
+            from llama_index.core.indices.document_summary.retrievers import \
+                DocumentSummaryIndexEmbeddingRetriever
+            return DocumentSummaryIndexEmbeddingRetriever(
                 self,
                 object_map=self._object_map,
                 embed_model=self._embed_model,
                 **kwargs,
             )
         if retriever_mode == _RetrieverMode.LLM:
-            return LLMRetriever(
+            from llama_index.core.indices.document_summary.retrievers import \
+                DocumentSummaryIndexLLMRetriever
+            return DocumentSummaryIndexLLMRetriever(
                 self, object_map=self._object_map, llm=self._llm, **kwargs
             )
         else:
