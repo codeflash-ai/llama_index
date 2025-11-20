@@ -161,6 +161,10 @@ class CallbackManager(BaseCallbackHandler, ABC):
                 event.on_end(payload={key, val})  # optional
         """
         # create event context wrapper
+        if not self.handlers:
+            yield _NoOpEventContext()
+            return
+
         event = EventContext(self, event_type, event_id=event_id)
         event.on_start(payload=payload)
 
@@ -240,6 +244,16 @@ class CallbackManager(BaseCallbackHandler, ABC):
     @property
     def trace_map(self) -> Dict[str, List[str]]:
         return self._trace_map
+
+
+class _NoOpEventContext:
+    """A minimal EventContext replacement when there are no handlers."""
+
+    def on_end(self, payload: Optional[Dict[str, Any]] = None, **kwargs: Any) -> None:
+        pass
+
+    def on_start(self, payload: Optional[Dict[str, Any]] = None, **kwargs: Any) -> None:
+        pass
 
 
 class EventContext:
