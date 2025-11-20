@@ -107,9 +107,6 @@ class LLMPredictor(BaseLLMPredictor):
         """Initialize params."""
         self._llm = resolve_llm(llm, callback_manager=callback_manager)
 
-        if callback_manager:
-            self._llm.callback_manager = callback_manager
-
         super().__init__(
             system_prompt=system_prompt,
             query_wrapper_prompt=query_wrapper_prompt,
@@ -318,7 +315,8 @@ class LLMPredictor(BaseLLMPredictor):
         """Add system and query wrapper prompts to base prompt."""
         extended_prompt = formatted_prompt
         if self.system_prompt:
-            extended_prompt = self.system_prompt + "\n\n" + extended_prompt
+            extended_prompt = f"{self.system_prompt}\n\n{extended_prompt}"
+
 
         if self.query_wrapper_prompt:
             extended_prompt = self.query_wrapper_prompt.format(
