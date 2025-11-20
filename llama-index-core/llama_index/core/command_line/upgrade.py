@@ -180,18 +180,19 @@ def parse_lines(
 
 def _cell_installs_llama_hub(cell) -> bool:
     lines = cell["source"]
-    llama_hub_partial_statements = [
-        "pip install llama-hub",
-        "import download_loader",
-        "import download_tool",
-    ]
 
     if len(lines) > 1:
         return False
-    if cell["cell_type"] == "code" and any(
-        el in lines[0] for el in llama_hub_partial_statements
-    ):
-        return True
+    if cell["cell_type"] == "code":
+        line = lines[0]
+        llama_hub_partial_statements = (
+            "pip install llama-hub",
+            "import download_loader",
+            "import download_tool",
+        )
+        for el in llama_hub_partial_statements:
+            if el in line:
+                return True
     return False
 
 
