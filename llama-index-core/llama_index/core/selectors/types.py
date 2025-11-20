@@ -64,10 +64,10 @@ def _wrap_choice(choice: MetadataType) -> ToolMetadata:
 
 
 def _wrap_query(query: QueryType) -> QueryBundle:
-    if isinstance(query, QueryBundle):
-        return query
-    elif isinstance(query, str):
+    if isinstance(query, str):
         return QueryBundle(query_str=query)
+    elif isinstance(query, QueryBundle):
+        return query
     else:
         raise ValueError(f"Unexpected type: {type(query)}")
 
