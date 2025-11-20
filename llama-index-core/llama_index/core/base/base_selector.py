@@ -55,10 +55,10 @@ SelectorResult = MultiSelection
 
 
 def _wrap_choice(choice: MetadataType) -> ToolMetadata:
-    if isinstance(choice, ToolMetadata):
-        return choice
-    elif isinstance(choice, str):
+    if isinstance(choice, str):
         return ToolMetadata(description=choice)
+    elif isinstance(choice, ToolMetadata):
+        return choice
     else:
         raise ValueError(f"Unexpected type: {type(choice)}")
 
