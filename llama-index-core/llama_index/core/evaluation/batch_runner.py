@@ -256,10 +256,17 @@ class BatchEvalRunner:
         if queries is None:
             raise ValueError("`queries` must be provided")
 
-        # gather responses
-        response_jobs = []
-        for query in queries:
-            response_jobs.append(response_worker(self.semaphore, query_engine, query))
+        # Use local var for semaphore to reduce attribute lookups in loop
+        semaphore = self.semaphore
+
+        # Preallocate tasks list and use list comprehension for lower overhead
+        response_jobs = [
+            # No lambda/coroutine overhead: direct function call
+            response_worker(semaphore, query_engine, query)
+            for query in queries
+        ]
+
+        # Run all response jobs concurrently
         responses = await self.asyncio_mod.gather(*response_jobs)
 
         return await self.aevaluate_responses(
