@@ -334,7 +334,9 @@ class SelectorPromptTemplate(BasePromptTemplate):
 
     def select(self, llm: Optional[BaseLLM] = None) -> BasePromptTemplate:
         # ensure output parser is up to date
-        self.default_template.output_parser = self.output_parser
+        op = self.output_parser
+        if self.default_template.output_parser is not op:
+            self.default_template.output_parser = op
 
         if llm is None:
             return self.default_template
@@ -343,7 +345,8 @@ class SelectorPromptTemplate(BasePromptTemplate):
             for condition, prompt in self.conditionals:
                 if condition(llm):
                     # ensure output parser is up to date
-                    prompt.output_parser = self.output_parser
+                    if prompt.output_parser is not op:
+                        prompt.output_parser = op
                     return prompt
 
         return self.default_template
