@@ -111,22 +111,22 @@ def run_transformations(
     Returns:
         The transformed nodes.
     """
-    if not in_place:
-        nodes = list(nodes)
+    items = nodes if in_place else list(nodes)
 
     for transform in transformations:
         if cache is not None:
-            hash = get_transformation_hash(nodes, transform)
+            hash = get_transformation_hash(items, transform)
             cached_nodes = cache.get(hash, collection=cache_collection)
             if cached_nodes is not None:
-                nodes = cached_nodes
+                items = cached_nodes
             else:
-                nodes = transform(nodes, **kwargs)
-                cache.put(hash, nodes, collection=cache_collection)
+                new_items = transform(items, **kwargs)
+                cache.put(hash, new_items, collection=cache_collection)
+                items = new_items
         else:
-            nodes = transform(nodes, **kwargs)
+            items = transform(items, **kwargs)
 
-    return nodes
+    return items
 
 
 async def arun_transformations(

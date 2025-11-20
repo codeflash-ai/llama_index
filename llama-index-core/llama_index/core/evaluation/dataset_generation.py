@@ -198,8 +198,8 @@ class DatasetGenerator(PromptMixin):
         )
 
         # use node postprocessor to filter nodes
-        required_keywords = required_keywords or []
-        exclude_keywords = exclude_keywords or []
+        required_keywords = required_keywords if required_keywords is not None else []
+        exclude_keywords = exclude_keywords if exclude_keywords is not None else []
         node_postprocessor = KeywordNodePostprocessor(
             callback_manager=callback_manager,
             required_keywords=required_keywords,
