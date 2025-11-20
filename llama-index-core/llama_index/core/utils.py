@@ -328,9 +328,10 @@ def get_cache_dir() -> str:
         )
         path = Path(local, "llama_index")
 
-    if not os.path.exists(path):
-        os.makedirs(
-            path, exist_ok=True
+    # Use pathlib's mkdir to avoid extra stat calls and keep objects as Path
+    if not path.exists():
+        path.mkdir(
+            parents=True, exist_ok=True
         )  # prevents https://github.com/jerryjliu/llama_index/issues/7362
     return str(path)
 
