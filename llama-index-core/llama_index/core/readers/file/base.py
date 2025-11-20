@@ -16,6 +16,8 @@ from llama_index.core.readers.base import BaseReader
 from llama_index.core.schema import Document
 from tqdm import tqdm
 
+_local_fs_instance = LocalFileSystem()
+
 
 def _try_loading_included_file_formats() -> Dict[str, Type[BaseReader]]:
     try:
@@ -104,11 +106,14 @@ class _DefaultFileMetadataFunc:
 
 
 def get_default_fs() -> fsspec.AbstractFileSystem:
-    return LocalFileSystem()
+    return _local_fs_instance
 
 
 def is_default_fs(fs: fsspec.AbstractFileSystem) -> bool:
-    return isinstance(fs, LocalFileSystem) and not fs.auto_mkdir
+    # Cache attribute lookup for auto_mkdir, avoiding repeated getattr calls
+    if type(fs) is LocalFileSystem:
+        return not fs.auto_mkdir
+    return False
 
 
 logger = logging.getLogger(__name__)
