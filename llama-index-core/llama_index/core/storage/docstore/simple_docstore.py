@@ -32,7 +32,8 @@ class SimpleDocumentStore(KVDocumentStore):
         batch_size: int = DEFAULT_BATCH_SIZE,
     ) -> None:
         """Init a SimpleDocumentStore."""
-        simple_kvstore = simple_kvstore or SimpleKVStore()
+        if simple_kvstore is None:
+            simple_kvstore = SimpleKVStore()
         super().__init__(simple_kvstore, namespace=namespace, batch_size=batch_size)
 
     @classmethod
