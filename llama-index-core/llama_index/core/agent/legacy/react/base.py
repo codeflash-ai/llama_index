@@ -75,15 +75,27 @@ class ReActAgent(BaseAgent):
         self._verbose = verbose
         self.sources: List[ToolOutput] = []
 
+
+        # Optimization: Pre-adapt tools if tools are fixed;
+        #                if retrieved by message, memoize per unique message.
+        self._tools_async: Optional[List[AsyncBaseTool]] = None
+        self._tools_cache: Optional[Dict[Any, List[AsyncBaseTool]]] = None
+
         if len(tools) > 0 and tool_retriever is not None:
             raise ValueError("Cannot specify both tools and tool_retriever")
         elif len(tools) > 0:
             self._get_tools = lambda _: tools
+            # Pre-wrap and cache async versions - tools are fixed
+            self._tools_async = [adapt_to_async_tool(t) for t in tools]
         elif tool_retriever is not None:
             tool_retriever_c = cast(ObjectRetriever[BaseTool], tool_retriever)
             self._get_tools = lambda message: tool_retriever_c.retrieve(message)
+            # Use a per-message tools cache
+            self._tools_cache = {}
         else:
             self._get_tools = lambda _: []
+
+            self._tools_async = []
 
     @classmethod
     def from_tools(
@@ -524,4 +536,15 @@ class ReActAgent(BaseAgent):
 
     def get_tools(self, message: str) -> List[AsyncBaseTool]:
         """Get tools."""
+        # Fast path: fixed tools (no message dependency).
+        if self._tools_async is not None:
+            return self._tools_async
+        # Memoize per-message if using tool_retriever (result must be independent per message).
+        if self._tools_cache is not None:
+            key = message
+            if key not in self._tools_cache:
+                sync_tools = self._get_tools(message)
+                self._tools_cache[key] = [adapt_to_async_tool(t) for t in sync_tools]
+            return self._tools_cache[key]
+        # Fallback (should be empty).
         return [adapt_to_async_tool(t) for t in self._get_tools(message)]
