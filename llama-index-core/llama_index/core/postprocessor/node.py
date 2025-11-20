@@ -13,6 +13,7 @@ from llama_index.core.response_synthesizers import (
 from llama_index.core.schema import NodeRelationship, NodeWithScore, QueryBundle
 from llama_index.core.service_context import ServiceContext
 from llama_index.core.storage.docstore import BaseDocumentStore
+from collections import deque
 
 logger = logging.getLogger(__name__)
 
@@ -376,13 +377,16 @@ class LongContextReorder(BaseNodePostprocessor):
         query_bundle: Optional[QueryBundle] = None,
     ) -> List[NodeWithScore]:
         """Postprocess nodes."""
-        reordered_nodes: List[NodeWithScore] = []
         ordered_nodes: List[NodeWithScore] = sorted(
             nodes, key=lambda x: x.score if x.score is not None else 0
         )
+        # Use deque for efficient insertions at both ends
+        reordered_deque: deque[NodeWithScore] = deque()
+        append_left = reordered_deque.appendleft
+        append_right = reordered_deque.append
         for i, node in enumerate(ordered_nodes):
             if i % 2 == 0:
-                reordered_nodes.insert(0, node)
+                append_left(node)
             else:
-                reordered_nodes.append(node)
-        return reordered_nodes
+                append_right(node)
+        return list(reordered_deque)
