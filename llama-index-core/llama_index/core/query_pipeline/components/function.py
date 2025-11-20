@@ -10,6 +10,7 @@ from llama_index.core.base.query_pipeline.query import (
 )
 from llama_index.core.bridge.pydantic import Field, PrivateAttr
 from llama_index.core.callbacks.base import CallbackManager
+from functools import lru_cache
 
 
 def get_parameters(fn: Callable) -> Tuple[Set[str], Set[str]]:
@@ -30,6 +31,16 @@ def get_parameters(fn: Callable) -> Tuple[Set[str], Set[str]]:
         else:
             optional_params.add(param_name)
     return required_params, optional_params
+
+
+@lru_cache(maxsize=128)
+def _cached_get_parameters(fn: Callable) -> tuple[Set[str], Set[str]]:
+    # Delegates to original get_parameters for caching.
+    # This avoids repeated inspection for same Python function objects.
+    # Hashability comes from Python function objects' own __hash__ identity.
+    from llama_index.core.query_pipeline.components.function import \
+        get_parameters
+    return get_parameters(fn)
 
 
 class FnComponent(QueryComponent):
@@ -56,8 +67,8 @@ class FnComponent(QueryComponent):
         **kwargs: Any,
     ) -> None:
         """Initialize."""
-        # determine parameters
-        default_req_params, default_opt_params = get_parameters(fn)
+        # Use cached get_parameters for performance efficiency.
+        default_req_params, default_opt_params = _cached_get_parameters(fn)
         if req_params is None:
             req_params = default_req_params
         if opt_params is None:
@@ -98,10 +109,13 @@ class FnComponent(QueryComponent):
 
     async def _arun_component(self, **kwargs: Any) -> Any:
         """Run component (async)."""
-        if self.async_fn is None:
+        async_fn = self.async_fn
+        if async_fn is None:
             return self._run_component(**kwargs)
         else:
-            return {self.output_key: await self.async_fn(**kwargs)}
+            # Store output_key to local for minimal attribute lookup
+            output_key = self.output_key
+            return {output_key: await async_fn(**kwargs)}
 
     @property
     def input_keys(self) -> InputKeys:
