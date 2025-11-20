@@ -94,15 +94,17 @@ class StorageContext:
             graph_store = graph_store or SimpleGraphStore()
             image_store = image_store or SimpleVectorStore()
 
-            if vector_store:
-                vector_stores = {DEFAULT_VECTOR_STORE: vector_store}
+            if vector_stores is not None:
+                stores = dict(
+                    vector_stores
+                )  # make a shallow copy to avoid input mutation
+            elif vector_store is not None:
+                stores = {DEFAULT_VECTOR_STORE: vector_store}
             else:
-                vector_stores = vector_stores or {
-                    DEFAULT_VECTOR_STORE: SimpleVectorStore()
-                }
-            if image_store:
-                # append image store to vector stores
-                vector_stores[IMAGE_VECTOR_STORE_NAMESPACE] = image_store
+                stores = {DEFAULT_VECTOR_STORE: SimpleVectorStore()}
+
+            if image_store is not None:
+                stores[IMAGE_VECTOR_STORE_NAMESPACE] = image_store
         else:
             docstore = docstore or SimpleDocumentStore.from_persist_dir(
                 persist_dir, fs=fs
@@ -114,22 +116,24 @@ class StorageContext:
                 persist_dir, fs=fs
             )
 
-            if vector_store:
-                vector_stores = {DEFAULT_VECTOR_STORE: vector_store}
-            elif vector_stores:
-                vector_stores = vector_stores
+            if vector_stores is not None:
+                stores = dict(
+                    vector_stores
+                )  # make a shallow copy to avoid input mutation
+            elif vector_store is not None:
+                stores = {DEFAULT_VECTOR_STORE: vector_store}
             else:
-                vector_stores = SimpleVectorStore.from_namespaced_persist_dir(
+                stores = SimpleVectorStore.from_namespaced_persist_dir(
                     persist_dir, fs=fs
                 )
-            if image_store:
-                # append image store to vector stores
-                vector_stores[IMAGE_VECTOR_STORE_NAMESPACE] = image_store  # type: ignore
+
+            if image_store is not None:
+                stores[IMAGE_VECTOR_STORE_NAMESPACE] = image_store  # type: ignore
 
         return cls(
             docstore=docstore,
             index_store=index_store,
-            vector_stores=vector_stores,  # type: ignore
+            vector_stores=stores,  # type: ignore
             graph_store=graph_store,
         )
 
