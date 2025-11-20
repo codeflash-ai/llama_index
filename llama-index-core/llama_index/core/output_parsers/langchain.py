@@ -32,16 +32,17 @@ class LangchainOutputParser(ChainableOutputParser):
         """Format a query with structured output formatting instructions."""
         format_instructions = self._output_parser.get_format_instructions()
 
-        # TODO: this is a temporary hack. if there's curly brackets in the format
-        # instructions (and query is a string template), we need to
-        # escape the curly brackets in the format instructions to preserve the
-        # overall template.
-        query_tmpl_vars = {
-            v for _, v, _, _ in Formatter().parse(query) if v is not None
-        }
-        if len(query_tmpl_vars) > 0:
-            format_instructions = format_instructions.replace("{", "{{")
-            format_instructions = format_instructions.replace("}", "}}")
+        # Optimization: Do not instantiate Formatter or parse unless "{" or "}" is in query
+        if "{" in query or "}" in query:
+            # Fast path: simple scan for '{' or '}' avoids unnecessary object creation
+            # Only parse if needed
+            # Optimization: Use a generator expression with next() early exit for any template variable in query
+            for _, v, _, _ in Formatter().parse(query):
+                if v is not None:
+                    format_instructions = format_instructions.replace("{", "{{")
+                    format_instructions = format_instructions.replace("}", "}}")
+                    break
+
 
         if self._format_key is not None:
             fmt_query = query.format(**{self._format_key: format_instructions})
