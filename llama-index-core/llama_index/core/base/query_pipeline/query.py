@@ -22,6 +22,7 @@ from llama_index.core.base.response.schema import Response
 from llama_index.core.bridge.pydantic import BaseModel, Field
 from llama_index.core.callbacks.base import CallbackManager
 from llama_index.core.schema import NodeWithScore, QueryBundle, TextNode
+import collections.abc
 
 ## Define common types used throughout these components
 StringableInput = Union[
@@ -37,19 +38,22 @@ StringableInput = Union[
 
 
 def validate_and_convert_stringable(input: Any) -> str:
+    # Cache types for efficiency in loops
+    stringable_types = get_args(StringableInput)
     # special handling for generator
-    if isinstance(input, Generator):
-        # iterate through each element, make sure is stringable
-        new_input = ""
+    if isinstance(input, collections.abc.Generator):
+        # Efficiently accumulate string parts, then join once
+        parts = []
         for elem in input:
-            if not isinstance(elem, get_args(StringableInput)):
+            if not isinstance(elem, stringable_types):
                 raise ValueError(f"Input {elem} is not stringable.")
             elif isinstance(elem, (ChatResponse, CompletionResponse)):
-                new_input += cast(str, elem.delta)
+                parts.append(cast(str, elem.delta))
             else:
-                new_input += str(elem)
-        return new_input
-    elif isinstance(input, List):
+                parts.append(str(elem))
+        return "".join(parts)
+    elif isinstance(input, list):
+        # recursively apply for each element, as before
         # iterate through each element, make sure is stringable
         # do this recursively
         new_input_list = []
@@ -58,7 +62,7 @@ def validate_and_convert_stringable(input: Any) -> str:
         return str(new_input_list)
     elif isinstance(input, ChatResponse):
         return input.message.content or ""
-    elif isinstance(input, get_args(StringableInput)):
+    elif isinstance(input, stringable_types):
         return str(input)
     else:
         raise ValueError(f"Input {input} is not stringable.")
