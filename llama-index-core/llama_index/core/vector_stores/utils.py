@@ -133,10 +133,4 @@ def legacy_metadata_dict_to_node(
         metadata["doc_id"] = doc_id
 
     # remaining metadata is metadata or node_info
-    new_metadata = {}
-    for key, val in metadata.items():
-        # don't enforce types on metadata anymore (we did in the past)
-        # since how we store this data now has been updated
-        new_metadata[key] = val
-
-    return new_metadata, node_info, relationships
+    return metadata, node_info, relationships
