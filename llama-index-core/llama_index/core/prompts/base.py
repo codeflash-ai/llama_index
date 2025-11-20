@@ -149,7 +149,10 @@ class PromptTemplate(BasePromptTemplate):
     ) -> None:
         if metadata is None:
             metadata = {}
-        metadata["prompt_type"] = prompt_type
+        # Avoid unnecessary dict mutation if prompt_type is already correct
+        if metadata.get("prompt_type") != prompt_type:
+            metadata["prompt_type"] = prompt_type
+
 
         template_vars = get_template_vars(template)
 
