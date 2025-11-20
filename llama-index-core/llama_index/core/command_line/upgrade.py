@@ -20,15 +20,29 @@ def _parse_from_imports(
     parsing_modules = False
     skipped_lines = 0
 
-    for line in lines[line_idx:]:
+    # Optimize installed_modules checks by using a set for O(1) membership tests.
+    installed_modules_set = set(installed_modules)
+
+    # Precompute and cache the replacement string for "llama_index"
+    LI_REPLACEMENT = "llama_index.core"
+
+    length_lines = len(lines)
+    i = line_idx
+
+    while i < length_lines:
+        line = lines[i]
         skipped_lines += 1
         if "from " in line:
-            imported_modules = [line, line.strip().split(" import ")[-1].strip()]
-            if imported_modules[-1].startswith("("):
+            import_stripped = line.strip()
+            part_import = import_stripped.split(" import ")
+            imported_part = part_import[-1].strip()
+            imported_modules = [line, imported_part]
+            if imported_part.startswith("("):
                 imported_modules[-1] = []
                 parsing_modules = True
             else:
-                imported_modules = [line, imported_modules[-1].split(", ")]
+                imported_modules = [line, imported_part.split(", ")]
+        
 
         if parsing_modules:
             if ")" in line:
@@ -36,16 +50,14 @@ def _parse_from_imports(
             elif "(" not in line:
                 imported_modules[-1].append(line.strip().replace(",", ""))
 
-        if not parsing_modules and len(imported_modules) > 0:
+        if not parsing_modules and imported_modules:
+            # flatten to module names
             imported_module_names = [x.strip() for x in imported_modules[-1]]
-            new_imports = {}
+            new_imports_dict = {}
+
             for module in imported_module_names:
                 if module in mappings:
                     new_import_parent = mappings[module]
-                    if new_import_parent not in new_imports:
-                        new_imports[new_import_parent] = [module]
-                    else:
-                        new_imports[new_import_parent].append(module)
                 else:
                     print(f"Module not found: {module}\nSwitching to core")
                     # get back the llama_index module that's being imported.
@@ -55,34 +67,41 @@ def _parse_from_imports(
                     # if the parent contains `llama_index.core` already, then skip
                     if "llama_index.core" not in new_import_parent:
                         new_import_parent = new_import_parent.replace(
-                            "llama_index", "llama_index.core"
+                            "llama_index", LI_REPLACEMENT
                         )
-
-                    if new_import_parent not in new_imports:
-                        new_imports[new_import_parent] = [module]
-                    else:
-                        new_imports[new_import_parent].append(module)
-
-            for new_import_parent, new_imports in new_imports.items():
-                new_install_parent = new_import_parent.replace(".", "-").replace(
-                    "_", "-"
-                )
-                if new_install_parent not in installed_modules:
-                    overlap = [x for x in installed_modules if x in new_install_parent]
-                    if len(overlap) == 0:
+                # Aggregate modules per parent
+                if new_import_parent not in new_imports_dict:
+                    new_imports_dict[new_import_parent] = [module]
+                else:
+                    new_imports_dict[new_import_parent].append(module)
+            
+            for new_import_parent, module_list in new_imports_dict.items():
+                # Precompute install parent
+                new_install_parent = new_import_parent.replace(".", "-").replace("_", "-")
+                # Installed check using set (O(1))
+                if new_install_parent not in installed_modules_set:
+                    # Optimize overlap check by searching, not scanning full list
+                    found_overlap = False
+                    for x in installed_modules_set:
+                        if x in new_install_parent:
+                            found_overlap = True
+                            break
+                    if not found_overlap:
                         installed_modules.append(new_install_parent)
+                        installed_modules_set.add(new_install_parent)
                         new_installs.append(f"%pip install {new_install_parent}\n")
-                new_imports = ", ".join(new_imports)
-                new_lines.append(f"from {new_import_parent} import {new_imports}\n")
+                modules_joined = ", ".join(module_list)
+                new_lines.append(f"from {new_import_parent} import {modules_joined}\n")
 
-                parsing_modules = False
-                new_imports = {}
-                imported_modules = []
+            # reset flags/arrays for next round!
+            parsing_modules = False
+            imported_modules = []
 
             return new_lines, new_installs, installed_modules, skipped_lines
 
         elif not parsing_modules:
             new_lines.append(line)
+        i += 1
 
     return new_lines, new_installs, installed_modules, skipped_lines
 
