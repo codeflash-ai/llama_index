@@ -329,12 +329,14 @@ class LLMPredictor(BaseLLMPredictor):
 
     def _extend_messages(self, messages: List[ChatMessage]) -> List[ChatMessage]:
         """Add system prompt to chat message list."""
-        if self.system_prompt:
-            messages = [
-                ChatMessage(role=MessageRole.SYSTEM, content=self.system_prompt),
-                *messages,
-            ]
-        return messages
+        # Fast-path: avoid creating a new list and ChatMessage unless needed
+        if not self.system_prompt:
+            return messages
+        sys_msg = ChatMessage(role=MessageRole.SYSTEM, content=self.system_prompt)
+        # Most efficient: pre-size resulting list if messages is not empty
+        if not messages:
+            return [sys_msg]
+        return [sys_msg, *messages]
 
 
 LLMPredictorType = Union[LLMPredictor, LLM]
