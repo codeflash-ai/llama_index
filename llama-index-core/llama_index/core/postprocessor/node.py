@@ -76,22 +76,17 @@ class SimilarityPostprocessor(BaseNodePostprocessor):
         query_bundle: Optional[QueryBundle] = None,
     ) -> List[NodeWithScore]:
         """Postprocess nodes."""
-        sim_cutoff_exists = self.similarity_cutoff is not None
+        sim_cutoff = self.similarity_cutoff
 
-        new_nodes = []
-        for node in nodes:
-            should_use_node = True
-            if sim_cutoff_exists:
-                similarity = node.score
-                if similarity is None:
-                    should_use_node = False
-                elif cast(float, similarity) < cast(float, self.similarity_cutoff):
-                    should_use_node = False
+        if sim_cutoff is None:
+            # No similarity cutoff; return all nodes directly
+            return nodes[:]
 
-            if should_use_node:
-                new_nodes.append(node)
-
-        return new_nodes
+        # Fast path filter using list comprehension and avoiding unnecessary casts
+        return [
+            node for node in nodes
+            if node.score is not None and node.score >= sim_cutoff
+        ]
 
 
 def get_forward_nodes(
