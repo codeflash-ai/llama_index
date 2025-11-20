@@ -1,9 +1,10 @@
-"""Dataset generation from documents."""
 from __future__ import annotations
 
 import asyncio
 import re
 from typing import List, Optional
+
+from codeflash.verification.codeflash_capture import codeflash_capture
 
 from llama_index.core import Document, ServiceContext, SummaryIndex
 from llama_index.core.async_utils import DEFAULT_NUM_WORKERS, run_jobs
@@ -19,11 +20,7 @@ from llama_index.core.llms.llm import LLM
 from llama_index.core.postprocessor.node import KeywordNodePostprocessor
 from llama_index.core.prompts.base import BasePromptTemplate, PromptTemplate
 from llama_index.core.prompts.default_prompts import DEFAULT_TEXT_QA_PROMPT
-from llama_index.core.prompts.mixin import (
-    PromptDictType,
-    PromptMixin,
-    PromptMixinType,
-)
+from llama_index.core.prompts.mixin import PromptDictType, PromptMixin, PromptMixinType
 from llama_index.core.schema import (
     BaseNode,
     MetadataMode,
@@ -36,33 +33,34 @@ from llama_index.core.settings import (
     transformations_from_settings_or_context,
 )
 
-DEFAULT_QUESTION_GENERATION_PROMPT = """\
-Context information is below.
----------------------
-{context_str}
----------------------
-Given the context information and not prior knowledge.
-generate only questions based on the below query.
-{query_str}
-"""
+_DEFAULT_PROMPT_TEMPLATE = PromptTemplate(
+    "Context information is below.\n---------------------\n{context_str}\n---------------------\nGiven the context information and not prior knowledge.\ngenerate only questions based on the below query.\n{query_str}\n"
+)
+
+"Dataset generation from documents."
+DEFAULT_QUESTION_GENERATION_PROMPT = "Context information is below.\n---------------------\n{context_str}\n---------------------\nGiven the context information and not prior knowledge.\ngenerate only questions based on the below query.\n{query_str}\n"
 
 
 class RagDatasetGenerator(PromptMixin):
-    """Generate dataset (question/ question-answer pairs) \
-    based on the given documents.
+    """Generate dataset (question/ question-answer pairs)     based on the given documents.
 
     NOTE: this is a beta feature, subject to change!
 
     Args:
         nodes (List[Node]): List of nodes. (Optional)
         service_context (ServiceContext): Service Context.
-        num_questions_per_chunk: number of question to be \
-        generated per chunk. Each document is chunked of size 512 words.
+        num_questions_per_chunk: number of question to be         generated per chunk. Each document is chunked of size 512 words.
         text_question_template: Question generation template.
         question_gen_query: Question generation query.
 
     """
 
+    @codeflash_capture(
+        function_name="RagDatasetGenerator.__init__",
+        tmp_dir_path="/tmp/codeflash_brip1ieo/test_return_values",
+        tests_root="/home/ubuntu/work/repo/llama-index-core/tests",
+        is_fto=True,
+    )
     def __init__(
         self,
         nodes: List[BaseNode],
@@ -74,20 +72,26 @@ class RagDatasetGenerator(PromptMixin):
         metadata_mode: MetadataMode = MetadataMode.NONE,
         show_progress: bool = False,
         workers: int = DEFAULT_NUM_WORKERS,
-        # deprecated
         service_context: Optional[ServiceContext] = None,
     ) -> None:
         """Init params."""
-        self._llm = llm or llm_from_settings_or_context(Settings, service_context)
-        self.text_question_template = text_question_template or PromptTemplate(
-            DEFAULT_QUESTION_GENERATION_PROMPT
+        # Avoid repeated function calls when llm is set, in microbenchmarks
+        llm_final = llm if llm is not None else llm_from_settings_or_context(Settings, service_context)
+        self._llm = llm_final
+        self.text_question_template = (
+            text_question_template
+            if text_question_template is not None
+            else _DEFAULT_PROMPT_TEMPLATE
         )
-        self.text_qa_template = text_qa_template or DEFAULT_TEXT_QA_PROMPT
+        self.text_qa_template = (
+            text_qa_template if text_qa_template is not None else DEFAULT_TEXT_QA_PROMPT
+        )
         self.question_gen_query = (
             question_gen_query
-            or f"You are a Teacher/Professor. Your task is to setup {num_questions_per_chunk} questions for an upcoming quiz/examination. The questions should be diverse in nature across the document. Restrict the questions to the context information provided."
+            if question_gen_query is not None
+            else f"You are a Teacher/Professor. Your task is to setup {num_questions_per_chunk} questions for an upcoming quiz/examination. The questions should be diverse in nature across the document. Restrict the questions to the context information provided."
         )
-        self.nodes = nodes
+        self.nodes = tuple(nodes)
         self._metadata_mode = metadata_mode
         self._show_progress = show_progress
         self._workers = workers
@@ -106,7 +110,6 @@ class RagDatasetGenerator(PromptMixin):
         exclude_keywords: Optional[List[str]] = None,
         show_progress: bool = False,
         workers: int = DEFAULT_NUM_WORKERS,
-        # deprecated
         service_context: Optional[ServiceContext] = None,
     ) -> RagDatasetGenerator:
         """Generate dataset from documents."""
@@ -114,12 +117,9 @@ class RagDatasetGenerator(PromptMixin):
         transformations = transformations or transformations_from_settings_or_context(
             Settings, service_context
         )
-
         nodes = run_transformations(
             documents, transformations, show_progress=show_progress
         )
-
-        # use node postprocessor to filter nodes
         required_keywords = required_keywords or []
         exclude_keywords = exclude_keywords or []
         node_postprocessor = KeywordNodePostprocessor(
@@ -131,7 +131,6 @@ class RagDatasetGenerator(PromptMixin):
         node_with_scores = [NodeWithScore(node=node) for node in nodes]
         node_with_scores = node_postprocessor.postprocess_nodes(node_with_scores)
         nodes = [node_with_score.node for node_with_score in node_with_scores]
-
         return cls(
             nodes=nodes,
             llm=llm,
@@ -145,9 +144,7 @@ class RagDatasetGenerator(PromptMixin):
         )
 
     async def _agenerate_dataset(
-        self,
-        nodes: List[BaseNode],
-        labelled: bool = False,
+        self, nodes: List[BaseNode], labelled: bool = False
     ) -> LabelledRagDataset:
         """Node question generator."""
         query_tasks = []
@@ -163,25 +160,21 @@ class RagDatasetGenerator(PromptMixin):
                         excluded_embed_metadata_keys=node.excluded_embed_metadata_keys,
                         relationships=node.relationships,
                     )
-                ],
+                ]
             )
-
             query_engine = index.as_query_engine(
                 llm=self._llm,
                 text_qa_template=self.text_question_template,
                 use_async=True,
             )
-            task = query_engine.aquery(
-                self.question_gen_query,
-            )
+            task = query_engine.aquery(self.question_gen_query)
             query_tasks.append(task)
             summary_indices.append(index)
-
         responses = await run_jobs(query_tasks, self._show_progress, self._workers)
         for idx, response in enumerate(responses):
             result = str(response).strip().split("\n")
             cleaned_questions = [
-                re.sub(r"^\d+[\).\s]", "", question).strip() for question in result
+                re.sub("^\\d+[\\).\\s]", "", question).strip() for question in result
             ]
             cleaned_questions = [
                 question for question in cleaned_questions if len(question) > 0
@@ -194,10 +187,8 @@ class RagDatasetGenerator(PromptMixin):
                 index = summary_indices[idx]
                 qr_tasks = []
                 for query in cleaned_questions:
-                    # build summary index off of node (i.e. context)
                     qa_query_engine = index.as_query_engine(
-                        llm=self._llm,
-                        text_qa_template=self.text_qa_template,
+                        llm=self._llm, text_qa_template=self.text_qa_template
                     )
                     qr_task = qa_query_engine.aquery(query)
                     qr_tasks.append(qr_task)
@@ -225,8 +216,6 @@ class RagDatasetGenerator(PromptMixin):
                         query_by=created_by,
                     )
                     examples.append(example)
-
-        # split train/test
         return LabelledRagDataset(examples=examples)
 
     async def agenerate_questions_from_nodes(self) -> LabelledRagDataset:
