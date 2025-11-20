@@ -76,8 +76,10 @@ class GPTTreeIndexBuilder:
 
         """
         index_graph = IndexGraph()
-        for node in nodes:
-            index_graph.insert(node)
+        # Optimize: enumerate to avoid self.size lookup in insert
+        for i, node in enumerate(nodes):
+            index_graph.insert(node, index=i)
+
 
         if build_tree:
             return self.build_index_from_nodes(
