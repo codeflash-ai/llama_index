@@ -450,7 +450,7 @@ class PostgresKVStore(BaseKVStore):
 def params_from_uri(uri: str) -> dict:
     result = urlparse(uri)
     database = result.path[1:]
-    port = result.port if result.port else 5432
+    port = result.port or 5432
     return {
         "database": database,
         "user": result.username,
