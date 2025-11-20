@@ -80,13 +80,24 @@ class SimpleGraphStore(GraphStore):
 
     def __init__(
         self,
-        data: Optional[SimpleGraphStoreData] = None,
+        data: Optional["SimpleGraphStoreData"] = None,
         fs: Optional[fsspec.AbstractFileSystem] = None,
         **kwargs: Any,
     ) -> None:
         """Initialize params."""
-        self._data = data or SimpleGraphStoreData()
-        self._fs = fs or fsspec.filesystem("file")
+        # Use direct assignment with a fast inline check
+        if data is None:
+            # SimpleGraphStoreData() is likely cheap, but avoids allocation if not needed
+            self._data = SimpleGraphStoreData()
+        else:
+            self._data = data
+        if fs is None:
+            # Cache filesystem instance at class level to avoid repeated re-creation
+            if not hasattr(self.__class__, "_default_fs"):
+                self.__class__._default_fs = fsspec.filesystem("file")
+            self._fs = self.__class__._default_fs
+        else:
+            self._fs = fs
 
     @classmethod
     def from_persist_dir(
@@ -173,8 +184,8 @@ class SimpleGraphStore(GraphStore):
 
     @classmethod
     def from_dict(cls, save_dict: dict) -> "SimpleGraphStore":
-        data = SimpleGraphStoreData.from_dict(save_dict)
-        return cls(data)
+        # Avoid unnecessary local assignment, use direct return for fastest instantiation
+        return cls(SimpleGraphStoreData.from_dict(save_dict))
 
     def to_dict(self) -> dict:
         return self._data.to_dict()
