@@ -43,15 +43,17 @@ class SQLContextContainerBuilder:
         self.sql_database = sql_database
 
         # if context_dict provided, validate that all keys are valid table names
+
+        # Cache usable table names for efficiency if used multiple times
+        # This avoids repeated work and redundant set allocation during validation
+        usable_table_names_set = set(self.sql_database.get_usable_table_names())
         if context_dict is not None:
             # validate context_dict keys are valid table names
             context_keys = set(context_dict.keys())
-            if not context_keys.issubset(
-                set(self.sql_database.get_usable_table_names())
-            ):
+            if not context_keys.issubset(usable_table_names_set):
                 raise ValueError(
                     "Invalid context table names: "
-                    f"{context_keys - set(self.sql_database.get_usable_table_names())}"
+                    f"{context_keys - usable_table_names_set}"
                 )
         self.context_dict = context_dict or {}
         # build full context from sql_database
@@ -93,10 +95,9 @@ class SQLContextContainerBuilder:
 
     def _get_context_dict(self, ignore_db_schema: bool) -> Dict[str, str]:
         """Get full context dict."""
-        if ignore_db_schema:
-            return self.context_dict
-        else:
-            return self.full_context_dict
+        # Return dict directly, skip any recomputation or copy for efficiency
+        # This function only returns references, consistent with original semantics
+        return self.context_dict if ignore_db_schema else self.full_context_dict
 
     def derive_index_from_context(
         self,
@@ -151,8 +152,7 @@ class SQLContextContainerBuilder:
         self, ignore_db_schema: bool = False
     ) -> SQLContextContainer:
         """Build index structure."""
-        full_context_dict = self._get_context_dict(ignore_db_schema)
         return SQLContextContainer(
             context_str=self.context_str,
-            context_dict=full_context_dict,
+            context_dict=self._get_context_dict(ignore_db_schema),
         )
