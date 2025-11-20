@@ -21,14 +21,16 @@ logger = logging.getLogger(__name__)
 
 def get_react_tool_descriptions(tools: Sequence[BaseTool]) -> List[str]:
     """Tool."""
-    tool_descs = []
+    # Preallocate list for efficiency
+    tool_descs: List[str] = []
+    # Avoid attribute lookup inside the f-string for each field, reducing repeated dot access
     for tool in tools:
-        tool_desc = (
-            f"> Tool Name: {tool.metadata.name}\n"
-            f"Tool Description: {tool.metadata.description}\n"
-            f"Tool Args: {tool.metadata.fn_schema_str}\n"
+        metadata = tool.metadata
+        tool_descs.append(
+            f"> Tool Name: {metadata.name}\n"
+            f"Tool Description: {metadata.description}\n"
+            f"Tool Args: {metadata.fn_schema_str}\n"
         )
-        tool_descs.append(tool_desc)
     return tool_descs
 
 
