@@ -159,19 +159,18 @@ class LLMPredictor(BaseLLMPredictor):
     def _log_template_data(
         self, prompt: BasePromptTemplate, **prompt_args: Any
     ) -> None:
-        template_vars = {
-            k: v
-            for k, v in ChainMap(prompt.kwargs, prompt_args).items()
-            if k in prompt.template_vars
+        merged = prompt.kwargs.copy()
+        merged.update(prompt_args)
+        template_vars = {k: merged[k] for k in prompt.template_vars if k in merged}
+        payload = {
+            EventPayload.TEMPLATE: prompt.get_template(llm=self._llm),
+            EventPayload.TEMPLATE_VARS: template_vars,
+            EventPayload.SYSTEM_PROMPT: self.system_prompt,
+            EventPayload.QUERY_WRAPPER_PROMPT: self.query_wrapper_prompt,
         }
         with self.callback_manager.event(
             CBEventType.TEMPLATING,
-            payload={
-                EventPayload.TEMPLATE: prompt.get_template(llm=self._llm),
-                EventPayload.TEMPLATE_VARS: template_vars,
-                EventPayload.SYSTEM_PROMPT: self.system_prompt,
-                EventPayload.QUERY_WRAPPER_PROMPT: self.query_wrapper_prompt,
-            },
+            payload=payload,
         ):
             pass
 
