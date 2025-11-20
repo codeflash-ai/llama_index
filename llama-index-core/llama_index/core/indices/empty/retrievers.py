@@ -34,5 +34,4 @@ class EmptyIndexRetriever(BaseRetriever):
 
     def _retrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
         """Retrieve relevant nodes."""
-        del query_bundle  # Unused
         return []
