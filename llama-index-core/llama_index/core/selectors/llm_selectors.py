@@ -162,6 +162,8 @@ class LLMMultiSelector(BaseSelector):
         if self._prompt.output_parser is None:
             raise ValueError("Prompt should have output parser.")
 
+        self._prompts_dict = {"prompt": self._prompt}
+
     @classmethod
     def from_defaults(
         cls,
@@ -189,7 +191,7 @@ class LLMMultiSelector(BaseSelector):
 
     def _get_prompts(self) -> Dict[str, Any]:
         """Get prompts."""
-        return {"prompt": self._prompt}
+        return self._prompts_dict
 
     def _update_prompts(self, prompts: PromptDictType) -> None:
         """Update prompts."""
