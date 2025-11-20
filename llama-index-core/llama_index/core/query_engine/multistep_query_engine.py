@@ -1,4 +1,4 @@
-from typing import Any, Callable, Dict, List, Optional, Tuple, cast
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from llama_index.core.base.base_query_engine import BaseQueryEngine
 from llama_index.core.base.response.schema import RESPONSE_TYPE
@@ -16,7 +16,7 @@ from llama_index.core.schema import NodeWithScore, QueryBundle, TextNode
 
 def default_stop_fn(stop_dict: Dict) -> bool:
     """Stop function for multi-step query combiner."""
-    query_bundle = cast(QueryBundle, stop_dict.get("query_bundle"))
+    query_bundle = stop_dict.get("query_bundle")
     if query_bundle is None:
         raise ValueError("Response must be provided to stop function.")
 
