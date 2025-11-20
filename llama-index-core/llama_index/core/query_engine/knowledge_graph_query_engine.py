@@ -105,14 +105,17 @@ class KnowledgeGraphQueryEngine(BaseQueryEngine):
             service_context=service_context,
         )
 
+        # Cache prompts dict for faster _get_prompts
+        self._cached_prompts: Dict[str, Any] = {
+            "graph_query_synthesis_prompt": self._graph_query_synthesis_prompt,
+            "graph_response_answer_prompt": self._graph_response_answer_prompt,
+        }
+
         super().__init__(callback_manager=callback_manager)
 
     def _get_prompts(self) -> Dict[str, Any]:
         """Get prompts."""
-        return {
-            "graph_query_synthesis_prompt": self._graph_query_synthesis_prompt,
-            "graph_response_answer_prompt": self._graph_response_answer_prompt,
-        }
+        return self._cached_prompts
 
     def _update_prompts(self, prompts: PromptDictType) -> None:
         """Update prompts."""
