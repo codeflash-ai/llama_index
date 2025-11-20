@@ -45,25 +45,35 @@ class MultiModalLLMCompletionProgram(BasePydanticProgram[BaseModel]):
         **kwargs: Any,
     ) -> "MultiModalLLMCompletionProgram":
         if multi_modal_llm is None:
-            try:
-                from llama_index.multi_modal_llms.openai import (
-                    OpenAIMultiModal,
-                )  # pants: no-infer-dep
+            # Use static attribute to cache the import and instance for repeated calls
+            if not hasattr(cls, '_default_openai_llm'):
+                try:
+                    from llama_index.multi_modal_llms.openai import \
+                        OpenAIMultiModal  # pants: no-infer-dep
+                    cls._default_openai_llm = OpenAIMultiModal(
+                        model="gpt-4-vision-preview", temperature=0
+                    )
+                except ImportError as e:
+                    raise ImportError(
+                        "`llama-index-multi-modal-llms-openai` package cannot be found. "
+                        "Please install it by using `pip install `llama-index-multi-modal-llms-openai`"
+                    )
+            multi_modal_llm = cls._default_openai_llm
 
-                multi_modal_llm = OpenAIMultiModal(
-                    model="gpt-4-vision-preview", temperature=0
-                )
-            except ImportError as e:
-                raise ImportError(
-                    "`llama-index-multi-modal-llms-openai` package cannot be found. "
-                    "Please install it by using `pip install `llama-index-multi-modal-llms-openai`"
-                )
-        if prompt is None and prompt_template_str is None:
-            raise ValueError("Must provide either prompt or prompt_template_str.")
-        if prompt is not None and prompt_template_str is not None:
+        if (prompt is None and prompt_template_str is None) or (prompt is not None and prompt_template_str is not None):
             raise ValueError("Must provide either prompt or prompt_template_str.")
         if prompt_template_str is not None:
-            prompt = PromptTemplate(prompt_template_str)
+            # Use a static to cache prompt templates for identical strings (optimization for repeated prompt structures)
+            if not hasattr(cls, '_prompt_template_cache'):
+                cls._prompt_template_cache = {}
+            prompt_cache = cls._prompt_template_cache
+            if prompt_template_str in prompt_cache:
+                prompt = prompt_cache[prompt_template_str]
+            else:
+                new_prompt = PromptTemplate(prompt_template_str)
+                prompt_cache[prompt_template_str] = new_prompt
+                prompt = new_prompt
+
         return cls(
             output_parser,
             prompt=cast(PromptTemplate, prompt),
