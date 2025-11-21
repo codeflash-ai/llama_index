@@ -62,11 +62,17 @@ class AgentInputComponent(QueryComponent):
     ) -> None:
         """Initialize."""
         # determine parameters
-        default_req_params, default_opt_params = get_parameters(fn)
-        if req_params is None:
+        # Optimize get_parameters call: Only call if both req_params and opt_params are None
+        if req_params is None and opt_params is None:
+            default_req_params, default_opt_params = get_parameters(fn)
             req_params = default_req_params
-        if opt_params is None:
             opt_params = default_opt_params
+
+        else:
+            if req_params is None:
+                req_params, _ = get_parameters(fn)
+            if opt_params is None:
+                _, opt_params = get_parameters(fn)
 
         self._req_params = req_params
         self._opt_params = opt_params
@@ -101,6 +107,7 @@ class AgentInputComponent(QueryComponent):
         return output
 
     def _validate_component_outputs(self, input: Dict[str, Any]) -> Dict[str, Any]:
+        # No optimization possible for a single return statement
         return input
 
     def _run_component(self, **kwargs: Any) -> Dict:
