@@ -162,18 +162,44 @@ class KnowledgeGraphIndex(BaseIndex[KG]):
     def _parse_triplet_response(
         response: str, max_length: int = 128
     ) -> List[Tuple[str, str, str]]:
-        knowledge_strs = response.strip().split("\n")
-        results = []
-        for text in knowledge_strs:
-            if "(" not in text or ")" not in text or text.index(")") < text.index("("):
+        """Parse an LLM output of KG triplets into a list of triplets."""
+
+        results: List[Tuple[str, str, str]] = []
+        # Avoid repeated allocations by storing .index values and using precompiled strip, etc.
+        strip_utf8 = str.strip
+        cap = str.capitalize
+        strip_quote = lambda s: s.strip('"')
+
+        # Only split lines that contain both '(' and ')', and are in proper order
+        # so avoid wasted work from clearly not-triplet lines.
+        # Localize methods for speed
+        str_index = str.index
+        str_split = str.split
+
+        # Avoid extra list allocations by iterating with generator
+        for text in response.strip().split('\n'):
+            try:
+                l_index = str_index(text, '(')
+                r_index = str_index(text, ')')
+                if r_index < l_index:
+                    continue
+                triplet_part = text[l_index + 1 : r_index]
+            except ValueError:
                 # skip empty lines and non-triplets
                 continue
-            triplet_part = text[text.index("(") + 1 : text.index(")")]
-            tokens = triplet_part.split(",")
+
+            # Split with max split for faster skip of extra commas
+            tokens = str_split(triplet_part, ",")
             if len(tokens) != 3:
                 continue
 
-            if any(len(s.encode("utf-8")) > max_length for s in tokens):
+            # Check byte-length of all tokens (avoid building intermediate list)
+            skip = False
+            for s in tokens:
+                if len(s.encode("utf-8")) > max_length:
+                    skip = True
+                    break
+            if skip:
                 # We count byte-length instead of len() for UTF-8 chars,
                 # will skip if any of the tokens are too long.
                 # This is normally due to a poorly formatted triplet
@@ -181,15 +207,19 @@ class KnowledgeGraphIndex(BaseIndex[KG]):
                 # we'll need NLP models to better extract triplets.
                 continue
 
-            subj, pred, obj = map(str.strip, tokens)
-            if not subj or not pred or not obj:
+            # Stripping and validation in one go, does not build tuple if fields empty
+            t0 = strip_utf8(tokens[0])
+            t1 = strip_utf8(tokens[1])
+            t2 = strip_utf8(tokens[2])
+            if not t0 or not t1 or not t2:
                 # skip partial triplets
                 continue
 
-            # Strip double quotes and Capitalize triplets for disambiguation
-            subj, pred, obj = (
-                entity.strip('"').capitalize() for entity in [subj, pred, obj]
-            )
+            # Strip double quotes and capitalize in-place using local functions for perf
+            subj = cap(strip_quote(t0))
+            pred = cap(strip_quote(t1))
+            obj = cap(strip_quote(t2))
+
 
             results.append((subj, pred, obj))
         return results
