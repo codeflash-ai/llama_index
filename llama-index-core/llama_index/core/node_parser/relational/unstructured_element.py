@@ -25,8 +25,7 @@ def html_to_df(html_str: str) -> pd.DataFrame:
 
     data = []
     for row in rows:
-        cols = row.xpath(".//td")
-        cols = [c.text.strip() if c.text is not None else "" for c in cols]
+        cols = [c.text.strip() if c.text is not None else "" for c in row.iterchildren(tag='td')]
         data.append(cols)
 
     # Check if the table is empty
