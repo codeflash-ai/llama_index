@@ -2,7 +2,6 @@
 
 from abc import ABC, abstractmethod
 from collections import defaultdict
-from copy import deepcopy
 from typing import Dict, Union
 
 from llama_index.core.prompts.base import BasePromptTemplate
@@ -43,7 +42,7 @@ class PromptMixin(ABC):
         self._validate_prompts(prompts_dict, module_dict)
 
         # avoid modifying the original dict
-        all_prompts = deepcopy(prompts_dict)
+        all_prompts = dict(prompts_dict)
         for module_name, prompt_module in module_dict.items():
             # append module name to each key in sub-modules by ":"
             for key, prompt in prompt_module.get_prompts().items():
