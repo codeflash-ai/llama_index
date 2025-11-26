@@ -109,8 +109,17 @@ class SimpleMultiModalQueryEngine(BaseQueryEngine):
         nodes: List[NodeWithScore],
         additional_source_nodes: Optional[Sequence[NodeWithScore]] = None,
     ) -> RESPONSE_TYPE:
-        image_nodes, text_nodes = _get_image_and_text_nodes(nodes)
-        context_str = "\n\n".join([r.get_content() for r in text_nodes])
+        image_nodes = []
+        text_nodes = []
+        context_str_items = []
+        for r in nodes:
+            node = r.node
+            if hasattr(node, "__class__") and node.__class__.__name__ == "ImageNode":
+                image_nodes.append(r)
+            else:
+                text_nodes.append(r)
+                context_str_items.append(r.get_content())
+        context_str = "\n\n".join(context_str_items)
         fmt_prompt = self._text_qa_template.format(
             context_str=context_str, query_str=query_bundle.query_str
         )
