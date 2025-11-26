@@ -287,7 +287,10 @@ class QueryPipeline(QueryComponent):
     def _get_leaf_keys(self) -> List[str]:
         """Get leaf keys."""
         # get all modules without downstream dependencies
-        return [v for v, d in self.dag.out_degree() if d == 0]
+        if hasattr(self.dag, '_succ'):
+            return [v for v, nbrs in self.dag._succ.items() if not nbrs]
+        else:
+            return [v for v, d in self.dag.out_degree() if d == 0]
 
     def set_callback_manager(self, callback_manager: CallbackManager) -> None:
         """Set callback manager."""
