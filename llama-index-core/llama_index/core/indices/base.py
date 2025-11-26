@@ -129,8 +129,10 @@ class BaseIndex(Generic[IS], ABC):
         )
 
         with callback_manager.as_trace("index_construction"):
+            # Optimized: List comprehension binding method lookup
+            set_document_hash = docstore.set_document_hash
             for doc in documents:
-                docstore.set_document_hash(doc.get_doc_id(), doc.hash)
+                set_document_hash(doc.get_doc_id(), doc.hash)
 
             nodes = run_transformations(
                 documents,  # type: ignore

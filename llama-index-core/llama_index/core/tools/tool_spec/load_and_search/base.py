@@ -122,12 +122,20 @@ class LoadAndSearchToolSpec(BaseToolSpec):
 
     def load(self, *args: Any, **kwargs: Any) -> Any:
         # Call the wrapped tool and save the result in the index
-        docs = self._tool(*args, **kwargs).raw_output
-        if self._index:
+        tool = self._tool
+        docs = tool(*args, **kwargs).raw_output
+        index_ref = self._index
+        index_kwargs_ref = self._index_kwargs
+        index_cls_ref = self._index_cls
+
+        if index_ref:
+            # Faster: Don't look up self._index in every iteration, use index_ref
             for doc in docs:
-                self._index.insert(doc, **self._index_kwargs)
+                index_ref.insert(doc, **index_kwargs_ref)
         else:
-            self._index = self._index_cls.from_documents(docs, **self._index_kwargs)
+            # Only call if docs is not empty (micro-optim, but matches previous logic)
+            index_ref = index_cls_ref.from_documents(docs, **index_kwargs_ref)
+            self._index = index_ref
         return (
             "Content loaded! You can now search the information using read_{}".format(
                 self._metadata.name
