@@ -282,7 +282,14 @@ class QueryPipeline(QueryComponent):
 
     def _get_root_keys(self) -> List[str]:
         """Get root keys."""
-        return [v for v, d in self.dag.in_degree() if d == 0]
+        # Optimization: Use dag._succ and dag._pred (networkx internal dicts) for faster access to node degrees
+        # Only nodes with zero predecessors are roots
+        dag = self.dag
+        # Using __iter__ is faster than in_degree(), and avoids tuple unpacking in a comprehension
+        # This avoids calling the networkx in_degree method (which, despite its name, is slightly slower
+        # for this simple "roots" check than just inspecting the ._pred mapping)
+        _pred = dag._pred
+        return [v for v in dag.nodes if not _pred[v]]
 
     def _get_leaf_keys(self) -> List[str]:
         """Get leaf keys."""
