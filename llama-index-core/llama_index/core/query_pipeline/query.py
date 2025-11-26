@@ -282,7 +282,12 @@ class QueryPipeline(QueryComponent):
 
     def _get_root_keys(self) -> List[str]:
         """Get root keys."""
-        return [v for v, d in self.dag.in_degree() if d == 0]
+        # Optimize by using self.dag.pred rather than in_degree for less overhead
+        # See: https://networkx.org/documentation/stable/reference/classes/digraph.html#networkx.classes.digraph.DiGraph.pred
+        dag_pred = self.dag.pred
+        # keys() returns all nodes; pred[node] is a dict of predecessors
+        # A node with no predecessors is a root
+        return [v for v in dag_pred if not dag_pred[v]]
 
     def _get_leaf_keys(self) -> List[str]:
         """Get leaf keys."""
