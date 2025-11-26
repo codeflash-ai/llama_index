@@ -16,8 +16,6 @@ from typing import (
 )
 
 import networkx
-
-from llama_index.core.async_utils import run_jobs
 from llama_index.core.bridge.pydantic import Field
 from llama_index.core.callbacks import CallbackManager
 from llama_index.core.callbacks.schema import CBEventType, EventPayload
@@ -30,6 +28,7 @@ from llama_index.core.base.query_pipeline.query import (
     QueryComponent,
 )
 from llama_index.core.utils import print_text
+import asyncio
 
 
 def get_output(
@@ -602,12 +601,17 @@ class QueryPipeline(QueryComponent):
             for module_key in popped_nodes:
                 module = self.module_dict[module_key]
                 module_input = all_module_inputs[module_key]
-                tasks.append(module.arun_component(**module_input))
+                coro = module.arun_component(**module_input)
+                tasks.append(asyncio.create_task(coro))
 
-            # run tasks
-            output_dicts = await run_jobs(
-                tasks, show_progress=self.show_progress, workers=self.num_workers
-            )
+            output_dicts = [None] * len(tasks)
+            completed = 0
+            for future in asyncio.as_completed(tasks):
+                result = await future
+                output_dicts[completed] = result
+                completed += 1
+
+            # preserve behavior: zip output_dicts with popped_nodes
 
             for output_dict, module_key in zip(output_dicts, popped_nodes):
                 # get new nodes and is_leaf
