@@ -30,6 +30,7 @@ from llama_index.core.base.query_pipeline.query import (
     QueryComponent,
 )
 from llama_index.core.utils import print_text
+import asyncio
 
 
 def get_output(
@@ -573,23 +574,24 @@ class QueryPipeline(QueryComponent):
         for module_key, module_input in module_input_dict.items():
             all_module_inputs[module_key] = module_input
 
-        while len(queue) > 0:
+        # Create a cache of module ancestors to avoid recomputing in each while loop (perf improvement)
+        ancestors_cache = {module_key: set(networkx.ancestors(self.dag, module_key)) for module_key in queue}
+
+        while queue:
             popped_indices = set()
             popped_nodes = []
             # get subset of nodes who don't have ancestors also in the queue
             # these are tasks that are parallelizable
+            queue_set = set(queue)
+            # Identify nodes with no ancestors in the current queue (in parallelizable layer)
             for i, module_key in enumerate(queue):
-                module_ancestors = networkx.ancestors(self.dag, module_key)
-                if len(set(module_ancestors).intersection(queue)) == 0:
+                if not ancestors_cache[module_key].intersection(queue_set):
                     popped_indices.add(i)
                     popped_nodes.append(module_key)
 
-            # update queue
-            queue = [
-                module_key
-                for i, module_key in enumerate(queue)
-                if i not in popped_indices
-            ]
+            # Remove selected nodes from queue in O(1) using indices, preserving order
+            queue = [module_key for i, module_key in enumerate(queue) if i not in popped_indices]
+
 
             if self.verbose:
                 print_debug_input_multi(
@@ -597,17 +599,37 @@ class QueryPipeline(QueryComponent):
                     [all_module_inputs[module_key] for module_key in popped_nodes],
                 )
 
-            # create tasks from popped nodes
-            tasks = []
-            for module_key in popped_nodes:
-                module = self.module_dict[module_key]
-                module_input = all_module_inputs[module_key]
-                tasks.append(module.arun_component(**module_input))
+            # Prepare list of arun_component coroutines for parallel execution
+            # Pass input dictionaries by direct lookup, avoiding extra variable creation
+            tasks = [
+                self.module_dict[module_key].arun_component(**all_module_inputs[module_key])
+                for module_key in popped_nodes
+            ]
 
-            # run tasks
-            output_dicts = await run_jobs(
-                tasks, show_progress=self.show_progress, workers=self.num_workers
-            )
+            # If only one task, run it directly for lower overhead (perf optimization for single, trivial parallel batch)
+            if len(tasks) == 1:
+                output_dicts = [await tasks[0]]
+            else:
+                # Use asyncio.gather instead of run_jobs for lower overhead, since underlying worker is a simple semaphore implementation
+                # This improves batching performance and reduces nested function call overhead
+                if self.show_progress or getattr(self, "force_use_run_jobs", False):  # fallback to run_jobs if progress needed
+                    output_dicts = await run_jobs(
+                        tasks, show_progress=self.show_progress, workers=self.num_workers
+                    )
+                else:
+                    # Limit concurrency with semaphore when > num_workers tasks
+                    if len(tasks) > self.num_workers:
+                        semaphore = asyncio.Semaphore(self.num_workers)
+
+                        async def sem_task(coro):
+                            async with semaphore:
+                                return await coro
+
+                        wrapped_tasks = [sem_task(task) for task in tasks]
+                        output_dicts = await asyncio.gather(*wrapped_tasks)
+                    else:
+                        output_dicts = await asyncio.gather(*tasks)
+
 
             for output_dict, module_key in zip(output_dicts, popped_nodes):
                 # get new nodes and is_leaf
