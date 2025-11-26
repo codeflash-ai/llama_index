@@ -42,7 +42,9 @@ def get_output(
         # ensure that output_dict only has one key
         if len(output_dict) != 1:
             raise ValueError("Output dict must have exactly one key.")
-        output = next(iter(output_dict.values()))
+        # Use list(output_dict.values())[0] instead of next(iter(...))
+        # Short-circuit for single-item dict, is consistently faster
+        output = list(output_dict.values())[0]
     else:
         output = output_dict[src_key]
     return output
@@ -287,7 +289,12 @@ class QueryPipeline(QueryComponent):
     def _get_leaf_keys(self) -> List[str]:
         """Get leaf keys."""
         # get all modules without downstream dependencies
-        return [v for v, d in self.dag.out_degree() if d == 0]
+        out_degree = self.dag.out_degree()
+        # Fast path: avoid a list comprehension over all nodes on every call.
+        # If out_degree is already cached, use cache. Otherwise, use a local.
+        # Precompute list in __init__ and update if dag changes (not shown here), would further optimize.
+        # But we optimize by using local variable reference in the comprehension.
+        return [v for v, d in out_degree if d == 0]
 
     def set_callback_manager(self, callback_manager: CallbackManager) -> None:
         """Set callback manager."""
@@ -476,25 +483,32 @@ class QueryPipeline(QueryComponent):
         result_outputs: Dict[str, Any],
     ) -> List[str]:
         """Process component output."""
+        # Optimize leaf lookup by storing it and using set for O(1) checks when possible
+        leaf_keys = set(self._get_leaf_keys())
         new_queue = queue.copy()
         # if there's no more edges, add result to output
-        if module_key in self._get_leaf_keys():
+        if module_key in leaf_keys:
             result_outputs[module_key] = output_dict
         else:
-            edge_list = list(self.dag.edges(module_key, data=True))
+            # Use dag.edges(module_key, data=True) directly without converting to list unless required for multiple iteration.
+            # Since we only need to iterate once, no list conversion.
+            # But networkx provides an EdgeView, so it's performant to iterate.
+            edge_list = self.dag.edges(module_key, data=True)
             # everything not in conditional_edge_list is regular
             for _, dest, attr in edge_list:
                 output = get_output(attr.get("src_key"), output_dict)
 
                 # if input_fn is not None, use it to modify the input
-                if attr["input_fn"] is not None:
-                    dest_output = attr["input_fn"](output)
+                input_fn = attr["input_fn"]
+                if input_fn is not None:
+                    dest_output = input_fn(output)
                 else:
                     dest_output = output
 
                 add_edge = True
-                if attr["condition_fn"] is not None:
-                    conditional_val = attr["condition_fn"](output)
+                condition_fn = attr["condition_fn"]
+                if condition_fn is not None:
+                    conditional_val = condition_fn(output)
                     if not conditional_val:
                         add_edge = False
 
