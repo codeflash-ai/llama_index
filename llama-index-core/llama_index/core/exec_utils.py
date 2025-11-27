@@ -150,3 +150,9 @@ def safe_exec(
     """
     _verify_source_safety(__source)
     return exec(__source, _get_restricted_globals(__globals), __locals)
+
+
+def _restricted_import(name, globals=None, locals=None, fromlist=(), level=0):
+    if name.split(".", 1)[0] not in ALLOWED_IMPORTS:
+        raise ImportError(f"Importing {name} is not allowed")
+    return __import__(name, globals, locals, fromlist, level)

@@ -8,6 +8,9 @@ import pandas as pd
 from llama_index.core.exec_utils import safe_eval, safe_exec
 from llama_index.core.output_parsers.base import ChainableOutputParser
 from llama_index.core.output_parsers.utils import parse_code_markdown
+import ast
+import sys
+import traceback
 
 logger = logging.getLogger(__name__)
 
@@ -16,9 +19,6 @@ def default_output_processor(
     output: str, df: pd.DataFrame, **output_kwargs: Any
 ) -> str:
     """Process outputs in a default manner."""
-    import ast
-    import sys
-    import traceback
 
     if sys.version_info < (3, 9):
         logger.warning(
@@ -37,8 +37,9 @@ def default_output_processor(
     # see langchain.tools.python.tool (PythonAstREPLTool)
     try:
         tree = ast.parse(output)
-        module = ast.Module(tree.body[:-1], type_ignores=[])
-        safe_exec(ast.unparse(module), {}, local_vars)  # type: ignore
+        if len(tree.body) > 1:
+            module = ast.Module(tree.body[:-1], type_ignores=[])
+            safe_exec(ast.unparse(module), {}, local_vars)  # type: ignore
         module_end = ast.Module(tree.body[-1:], type_ignores=[])
         module_end_str = ast.unparse(module_end)  # type: ignore
         if module_end_str.strip("'\"") != module_end_str:
@@ -51,7 +52,8 @@ def default_output_processor(
             if "max_colwidth" in output_kwargs:
                 pd.set_option("display.max_colwidth", output_kwargs["max_colwidth"])
             output_str = str(safe_eval(module_end_str, {"np": np}, local_vars))
-            pd.reset_option("display.max_colwidth")
+            if "max_colwidth" in output_kwargs:
+                pd.reset_option("display.max_colwidth")
             return output_str
 
         except Exception:
