@@ -108,13 +108,29 @@ class NERPIINodePostprocessor(BaseNodePostprocessor):
 
     def mask_pii(self, ner: Callable, text: str) -> Tuple[str, Dict]:
         """Mask PII in text."""
-        new_text = text
         response = ner(text)
         mapping = {}
-        for entry in response:
-            entity_group_tag = f"[{entry['entity_group']}_{entry['start']}]"
-            new_text = new_text.replace(entry["word"], entity_group_tag).strip()
-            mapping[entity_group_tag] = entry["word"]
+        # Prepare substitutions efficiently
+        new_text_segments = []
+        last_idx = 0
+        # Sort response by start position for deterministic replacement order
+        sorted_response = sorted(response, key=lambda entry: entry["start"])
+        for entry in sorted_response:
+            start = entry["start"]
+            end = entry["end"]
+            entity_group_tag = f"[{entry['entity_group']}_{start}]"
+            word = entry["word"]
+            # Append text before the entity
+            new_text_segments.append(text[last_idx:start])
+            # Replace entity with tag
+            new_text_segments.append(entity_group_tag)
+            # Record mapping
+            mapping[entity_group_tag] = word
+            last_idx = end
+        # Append remaining text after last entity
+        new_text_segments.append(text[last_idx:])
+        # Join segments once
+        new_text = ''.join(new_text_segments).strip()
         return new_text, mapping
 
     def _postprocess_nodes(
