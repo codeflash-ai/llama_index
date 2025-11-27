@@ -11,14 +11,20 @@ from llama_index.core.agent.react.types import (
 )
 from llama_index.core.output_parsers.utils import extract_json_str
 from llama_index.core.types import BaseOutputParser
+import dirtyjson as json
+
+_TOOL_USE_PATTERN = re.compile(
+    r"\s*Thought: (.*?)\nAction: ([a-zA-Z0-9_]+).*?\nAction Input: .*?(\{.*\})",
+    re.DOTALL,
+)
+
+_APOSTROPHE_PATTERN = re.compile(r"(?<!\w)\'|\'(?!\w)")
+
+_ACTION_INPUT_PAIR_PATTERN = re.compile(r'"(\w+)":\s*"([^"]*)"')
 
 
 def extract_tool_use(input_text: str) -> Tuple[str, str, str]:
-    pattern = (
-        r"\s*Thought: (.*?)\nAction: ([a-zA-Z0-9_]+).*?\nAction Input: .*?(\{.*\})"
-    )
-
-    match = re.search(pattern, input_text, re.DOTALL)
+    match = _TOOL_USE_PATTERN.search(input_text)
     if not match:
         raise ValueError(f"Could not extract tool use from input text: {input_text}")
 
@@ -29,9 +35,8 @@ def extract_tool_use(input_text: str) -> Tuple[str, str, str]:
 
 
 def action_input_parser(json_str: str) -> dict:
-    processed_string = re.sub(r"(?<!\w)\'|\'(?!\w)", '"', json_str)
-    pattern = r'"(\w+)":\s*"([^"]*)"'
-    matches = re.findall(pattern, processed_string)
+    processed_string = _APOSTROPHE_PATTERN.sub('"', json_str)
+    matches = _ACTION_INPUT_PAIR_PATTERN.findall(processed_string)
     return dict(matches)
 
 
@@ -53,9 +58,6 @@ def parse_action_reasoning_step(output: str) -> ActionReasoningStep:
     """
     Parse an action reasoning step from the LLM output.
     """
-    # Weaker LLMs may generate ReActAgent steps whose Action Input are horrible JSON strings.
-    # `dirtyjson` is more lenient than `json` in parsing JSON strings.
-    import dirtyjson as json
 
     thought, action, action_input = extract_tool_use(output)
     json_str = extract_json_str(action_input)
