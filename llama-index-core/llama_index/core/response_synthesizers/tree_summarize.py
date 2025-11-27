@@ -117,6 +117,8 @@ class TreeSummarize(BaseSynthesizer):
                     )
                     for text_chunk in text_chunks
                 ]
+                summary_responses = await asyncio.gather(*tasks)
+                summaries = summary_responses
             else:
                 tasks = [
                     self._llm.astructured_predict(
@@ -127,12 +129,8 @@ class TreeSummarize(BaseSynthesizer):
                     )
                     for text_chunk in text_chunks
                 ]
-
-            summary_responses = await asyncio.gather(*tasks)
-            if self._output_cls is not None:
+                summary_responses = await asyncio.gather(*tasks)
                 summaries = [summary.json() for summary in summary_responses]
-            else:
-                summaries = summary_responses
 
             # recursively summarize the summaries
             return await self.aget_response(

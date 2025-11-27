@@ -109,10 +109,8 @@ class StreamingResponse:
     def get_response(self) -> Response:
         """Get a standard response object."""
         if self.response_txt is None and self.response_gen is not None:
-            response_txt = ""
-            for text in self.response_gen:
-                response_txt += text
-            self.response_txt = response_txt
+            # Use join for efficient string building
+            self.response_txt = "".join(self.response_gen)
         return Response(self.response_txt, self.source_nodes, self.metadata)
 
     def print_response_stream(self) -> None:
