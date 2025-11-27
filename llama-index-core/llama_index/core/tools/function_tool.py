@@ -16,7 +16,9 @@ def sync_to_async(fn: Callable[..., Any]) -> AsyncCallable:
 
     async def _async_wrapped_fn(*args: Any, **kwargs: Any) -> Any:
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, lambda: fn(*args, **kwargs))
+        # Use functools.partial instead of lambda for better performance
+        from functools import partial
+        return await loop.run_in_executor(None, partial(fn, *args, **kwargs))
 
     return _async_wrapped_fn
 
