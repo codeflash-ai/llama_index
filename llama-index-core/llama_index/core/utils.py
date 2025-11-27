@@ -108,28 +108,34 @@ def set_global_tokenizer(tokenizer: Union[Tokenizer, Callable[[str], list]]) -> 
 def get_tokenizer() -> Callable[[str], List]:
     import llama_index.core
 
-    if llama_index.core.global_tokenizer is None:
-        tiktoken_import_err = (
-            "`tiktoken` package not found, please run `pip install tiktoken`"
-        )
-        try:
-            import tiktoken
-        except ImportError:
-            raise ImportError(tiktoken_import_err)
+    global_tokenizer = llama_index.core.global_tokenizer
+    if global_tokenizer is not None:
+        return global_tokenizer
 
-        # set tokenizer cache temporarily
-        should_revert = False
-        if "TIKTOKEN_CACHE_DIR" not in os.environ:
-            should_revert = True
-            os.environ["TIKTOKEN_CACHE_DIR"] = os.path.join(
-                os.path.dirname(os.path.abspath(__file__)),
-                "_static/tiktoken_cache",
-            )
+    tiktoken_import_err = (
+        "`tiktoken` package not found, please run `pip install tiktoken`"
+    )
+    # Import tiktoken only if necessary
+    try:
+        import tiktoken
+    except ImportError:
+        raise ImportError(tiktoken_import_err)
+
+    # Set tokenizer cache temporarily
+    should_revert = "TIKTOKEN_CACHE_DIR" not in os.environ
+    if should_revert:
+        os.environ["TIKTOKEN_CACHE_DIR"] = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            "_static/tiktoken_cache",
+        )
+
+    try:
 
         enc = tiktoken.encoding_for_model("gpt-3.5-turbo")
         tokenizer = partial(enc.encode, allowed_special="all")
         set_global_tokenizer(tokenizer)
 
+    finally:
         if should_revert:
             del os.environ["TIKTOKEN_CACHE_DIR"]
 
@@ -285,8 +291,8 @@ def get_tqdm_iterable(items: Iterable, show_progress: bool, desc: str) -> Iterab
 
 def count_tokens(text: str) -> int:
     tokenizer = get_tokenizer()
-    tokens = tokenizer(text)
-    return len(tokens)
+    # Avoid creating an intermediate variable for the tokens list
+    return len(tokenizer(text))
 
 
 def get_transformer_tokenizer_fn(model_name: str) -> Callable[[str], List[str]]:
