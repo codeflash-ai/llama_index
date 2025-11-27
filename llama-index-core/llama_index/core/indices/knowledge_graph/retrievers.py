@@ -526,6 +526,9 @@ class KnowledgeGraphRAGRetriever(BaseRetriever):
         except NotImplementedError:
             self._graph_schema = ""
         except Exception as e:
+            # Avoid repeated import in hot path
+            import logging
+            logger = logging.getLogger(__name__)
             logger.warning(f"Failed to get graph schema: {e}")
             self._graph_schema = ""
 
@@ -808,9 +811,9 @@ class KnowledgeGraphRAGRetriever(BaseRetriever):
 
     def _retrieve_embedding(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
         """Retrieve in embedding mode."""
-        if self._retriever_mode not in ["embedding", "keyword_embedding"]:
+        # Optimize lookup with a set for O(1) containment
+        if self._retriever_mode not in {"embedding", "keyword_embedding"}:
             return []
-        # TBD: will implement this later with vector store.
         raise NotImplementedError
 
     async def _aretrieve_embedding(
