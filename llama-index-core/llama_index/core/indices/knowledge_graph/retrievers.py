@@ -34,6 +34,7 @@ from llama_index.core.settings import (
 )
 from llama_index.core.storage.storage_context import StorageContext
 from llama_index.core.utils import print_text, truncate_text
+import itertools
 
 DQKET = DEFAULT_QUERY_KEYWORD_EXTRACT_TEMPLATE
 DEFAULT_NODE_SCORE = 1000.0
@@ -485,9 +486,8 @@ class KnowledgeGraphRAGRetriever(BaseRetriever):
         self._retriever_mode = retriever_mode
         self._with_nl2graphquery = with_nl2graphquery
         if self._with_nl2graphquery:
-            from llama_index.core.query_engine.knowledge_graph_query_engine import (
-                KnowledgeGraphQueryEngine,
-            )
+            from llama_index.core.query_engine.knowledge_graph_query_engine import \
+                KnowledgeGraphQueryEngine
 
             graph_query_synthesis_prompt = kwargs.get(
                 "graph_query_synthesis_prompt",
@@ -713,16 +713,17 @@ class KnowledgeGraphRAGRetriever(BaseRetriever):
         rel_map: Optional[Dict] = self._graph_store.get_rel_map(
             entities, self._graph_traversal_depth, limit=self._max_knowledge_sequence
         )
-        logger.debug(f"rel_map from GraphStore:\n{rel_map}")
+
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(f"rel_map from GraphStore:\n{rel_map}")
 
         # Build Knowledge Sequence
-        knowledge_sequence = []
         if rel_map:
-            knowledge_sequence.extend(
-                [str(rel_obj) for rel_objs in rel_map.values() for rel_obj in rel_objs]
-            )
+            chain_iter = itertools.chain.from_iterable(rel_map.values())
+            knowledge_sequence = [str(rel_obj) for rel_obj in chain_iter]
         else:
-            logger.info("> No knowledge sequence extracted from entities.")
+            if logger.isEnabledFor(logging.INFO):
+                logger.info("> No knowledge sequence extracted from entities.")
             return [], None
 
         return knowledge_sequence, rel_map
