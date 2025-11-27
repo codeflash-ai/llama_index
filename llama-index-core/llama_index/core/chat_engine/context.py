@@ -132,22 +132,28 @@ class ContextChatEngine(BaseChatEngine):
 
     def _get_prefix_messages_with_context(self, context_str: str) -> List[ChatMessage]:
         """Get the prefix messages with context."""
-        # ensure we grab the user-configured system prompt
-        system_prompt = ""
         prefix_messages = self._prefix_messages
-        if (
-            len(self._prefix_messages) != 0
-            and self._prefix_messages[0].role == MessageRole.SYSTEM
-        ):
-            system_prompt = str(self._prefix_messages[0].content)
-            prefix_messages = self._prefix_messages[1:]
+        # Fast path: no prefix or no system message
+        if not prefix_messages or prefix_messages[0].role != MessageRole.SYSTEM:
+            context_str_w_sys_prompt = "\n" + context_str
+            return [
+                ChatMessage(
+                    content=context_str_w_sys_prompt,
+                    role=self._llm.metadata.system_role
+                ),
+                *prefix_messages,
+            ]
+        # Only if there *is* a SYSTEM message
+        system_prompt = prefix_messages[0].content
+        # Avoid redundant str() wrapping, as content should already be string-like
 
         context_str_w_sys_prompt = system_prompt.strip() + "\n" + context_str
         return [
             ChatMessage(
-                content=context_str_w_sys_prompt, role=self._llm.metadata.system_role
+                content=context_str_w_sys_prompt,
+                role=self._llm.metadata.system_role
             ),
-            *prefix_messages,
+            *prefix_messages[1:],
         ]
 
     @trace_method("chat")
