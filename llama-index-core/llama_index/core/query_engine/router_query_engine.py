@@ -66,17 +66,17 @@ async def acombine_responses(
     summarizer: TreeSummarize, responses: List[RESPONSE_TYPE], query_bundle: QueryBundle
 ) -> RESPONSE_TYPE:
     """Async combine multiple response from sub-engines."""
-    logger.info("Combining responses from multiple query engines.")
+    # Move to debug level: much faster for routine ops
+    logger.debug("Combining responses from multiple query engines.")
 
-    response_strs = []
-    source_nodes = []
-    for response in responses:
-        if isinstance(response, (StreamingResponse, PydanticResponse)):
-            response_obj = response.get_response()
-        else:
-            response_obj = response
-        source_nodes.extend(response_obj.source_nodes)
-        response_strs.append(str(response))
+    # Use list comprehensions for aggregation
+    response_objs = [
+        response.get_response() if isinstance(response, (StreamingResponse, PydanticResponse)) else response
+        for response in responses
+    ]
+    source_nodes = [node for obj in response_objs for node in obj.source_nodes]
+    response_strs = [str(response) for response in responses]
+
 
     summary = await summarizer.aget_response(query_bundle.query_str, response_strs)
 
