@@ -8,6 +8,8 @@ with contextlib.suppress(ImportError):
 
 from llama_index.core.output_parsers.base import OutputParserException
 
+_CODE_BLOCK_PATTERN = re.compile(r"```(.*?)```", re.DOTALL)
+
 
 def _marshal_llm_to_json(output: str) -> str:
     """
@@ -62,32 +64,25 @@ def parse_json_markdown(text: str) -> Any:
 
 
 def parse_code_markdown(text: str, only_last: bool) -> List[str]:
-    # Regular expression pattern to match code within triple-backticks
-    pattern = r"```(.*?)```"
+    # Use precompiled regex to boost performance
+    matches = _CODE_BLOCK_PATTERN.findall(text)
 
-    # Find all matches of the pattern in the text
-    matches = re.findall(pattern, text, re.DOTALL)
+    # Return the last matched group if requested
 
     # Return the last matched group if requested
     code = matches[-1] if matches and only_last else matches
 
     # If empty we optimistically assume the output is the code
     if not code:
-        # we want to handle cases where the code may start or end with triple
-        # backticks
-        # we also want to handle cases where the code is surrounded by regular
-        # quotes
-        # we can't just remove all backticks due to JS template strings
+        candidate = text
+        starts = candidate.startswith
+        ends = candidate.endswith
 
-        candidate = text.strip()
-
-        if candidate.startswith('"') and candidate.endswith('"'):
+        if starts('"') and ends('"'):
             candidate = candidate[1:-1]
-
-        if candidate.startswith("'") and candidate.endswith("'"):
+        elif starts("'") and ends("'"):
             candidate = candidate[1:-1]
-
-        if candidate.startswith("`") and candidate.endswith("`"):
+        elif starts("`") and ends("`"):
             candidate = candidate[1:-1]
 
         # For triple backticks we split the handling of the start and end
