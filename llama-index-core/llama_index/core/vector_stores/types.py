@@ -105,7 +105,7 @@ class MetadataFilter(BaseModel):
             filter_dict: Dict with key, value and operator.
 
         """
-        return MetadataFilter.parse_obj(filter_dict)
+        return cls(**filter_dict)
 
 
 # # TODO: Deprecate ExactMatchFilter and use MetadataFilter instead
