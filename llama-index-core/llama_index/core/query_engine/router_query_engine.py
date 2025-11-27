@@ -294,11 +294,12 @@ class RetrieverRouterQueryEngine(BaseQueryEngine):
         self._retriever = retriever
         self._node_to_query_engine_fn = node_to_query_engine_fn
         super().__init__(callback_manager)
+        self._prompt_modules: PromptMixinType = {"retriever": self._retriever}
 
     def _get_prompt_modules(self) -> PromptMixinType:
         """Get prompt sub-modules."""
         # NOTE: don't include tools for now
-        return {"retriever": self._retriever}
+        return self._prompt_modules
 
     def _query(self, query_bundle: QueryBundle) -> RESPONSE_TYPE:
         nodes_with_score = self._retriever.retrieve(query_bundle)
