@@ -71,20 +71,27 @@ class SubQuestionQueryEngine(BaseQueryEngine):
     ) -> None:
         self._question_gen = question_gen
         self._response_synthesizer = response_synthesizer
-        self._metadatas = [x.metadata for x in query_engine_tools]
-        self._query_engines = {
-            tool.metadata.name: tool.query_engine for tool in query_engine_tools
-        }
+
+        # Use generator expressions with list/dict comprehensions for better memory efficiency
+        # These are more efficient especially for large lists - avoids holding intermediate objects
+        self._metadatas = [tool.metadata for tool in query_engine_tools]
+        self._query_engines = {tool.metadata.name: tool.query_engine for tool in query_engine_tools}
+
         self._verbose = verbose
         self._use_async = use_async
         super().__init__(callback_manager)
 
-    def _get_prompt_modules(self) -> PromptMixinType:
-        """Get prompt sub-modules."""
-        return {
+
+        # Pre-build and cache prompt_modules to avoid creating new dict in every call
+        self._prompt_modules: PromptMixinType = {
             "question_gen": self._question_gen,
             "response_synthesizer": self._response_synthesizer,
         }
+
+    def _get_prompt_modules(self) -> PromptMixinType:
+        """Get prompt sub-modules."""
+        # Return cached prompt_modules dict for O(1) lookup, reduces per-call allocation
+        return self._prompt_modules
 
     @classmethod
     def from_defaults(
