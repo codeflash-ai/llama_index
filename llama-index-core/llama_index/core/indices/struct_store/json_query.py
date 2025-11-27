@@ -105,6 +105,8 @@ class JSONQueryEngine(BaseQueryEngine):
         """Initialize params."""
         self._json_value = json_value
         self._json_schema = json_schema
+        # Cache serialized schema for performance. Assumes schema does not change.
+        self._json_schema_context_str = json.dumps(self._json_schema)
         self._llm = llm or llm_from_settings_or_context(Settings, service_context)
         self._json_path_prompt = json_path_prompt or DEFAULT_JSON_PATH_PROMPT
         self._output_processor = output_processor or default_output_processor
@@ -141,7 +143,7 @@ class JSONQueryEngine(BaseQueryEngine):
 
     def _get_schema_context(self) -> str:
         """Get JSON schema context."""
-        return json.dumps(self._json_schema)
+        return self._json_schema_context_str
 
     def _query(self, query_bundle: QueryBundle) -> Response:
         """Answer a query."""
