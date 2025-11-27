@@ -22,12 +22,35 @@ def get_top_k_embeddings(
 
     similarity_fn = similarity_fn or default_similarity_fn
 
+    if not embeddings:
+        return [], []
+
     embeddings_np = np.array(embeddings)
     query_embedding_np = np.array(query_embedding)
 
+    # Vectorized batch similarity calculation if possible
+    try:
+        # If function matches the standard, do a batch similarity.
+        if similarity_fn is default_similarity_fn:
+            # Default similarity: cosine, dot, or euclidean
+            # Let's check for cosine for fastest vectorized
+            sim = np.dot(embeddings_np, query_embedding_np)
+            norm = np.linalg.norm(query_embedding_np) * np.linalg.norm(
+                embeddings_np, axis=1
+            )
+            similarities = sim / norm
+        else:
+            similarities = np.array(
+                [similarity_fn(query_embedding_np, emb) for emb in embeddings_np]
+            )
+    except Exception:
+        # Fallback: original per-embedding loop
+        similarities = np.array(
+            [similarity_fn(query_embedding_np, emb) for emb in embeddings_np]
+        )
+
     similarity_heap: List[Tuple[float, Any]] = []
-    for i, emb in enumerate(embeddings_np):
-        similarity = similarity_fn(query_embedding_np, emb)
+    for i, similarity in enumerate(similarities):
         if similarity_cutoff is None or similarity > similarity_cutoff:
             heapq.heappush(similarity_heap, (similarity, embedding_ids[i]))
             if similarity_top_k and len(similarity_heap) > similarity_top_k:
@@ -88,7 +111,9 @@ def get_top_k_embeddings_learner(
     # infer on whatever data you wish, e.g. the original data
     similarities = clf.decision_function(dataset[1:])
     sorted_ix = np.argsort(-similarities)
-    top_sorted_ix = sorted_ix[:similarity_top_k]
+    top_sorted_ix = (
+        sorted_ix[:similarity_top_k] if similarity_top_k is not None else sorted_ix
+    )
 
     result_similarities = similarities[top_sorted_ix]
     result_ids = [embedding_ids[ix] for ix in top_sorted_ix]
@@ -112,29 +137,54 @@ def get_top_k_mmr_embeddings(
     A mmr_threshold of 1 will check similarity the query and ignore previous results.
 
     """
-    threshold = mmr_threshold or 0.5
+    threshold = mmr_threshold if mmr_threshold is not None else 0.5
     similarity_fn = similarity_fn or default_similarity_fn
 
-    if embedding_ids is None or embedding_ids == []:
+    if embedding_ids is None or not embedding_ids:
         embedding_ids = list(range(len(embeddings)))
+    if not embeddings:
+        return [], []
     full_embed_map = dict(zip(embedding_ids, range(len(embedding_ids))))
     embed_map = full_embed_map.copy()
     embed_similarity = {}
     score: float = -math.inf
     high_score_id = None
 
-    for i, emb in enumerate(embeddings):
-        similarity = similarity_fn(query_embedding, emb)
-        embed_similarity[embedding_ids[i]] = similarity
-        if similarity * threshold > score:
-            high_score_id = embedding_ids[i]
-            score = similarity * threshold
+    # Vectorize similarities if using default similarity and possible
+    embeddings_np = np.array(embeddings)
+    query_embedding_np = np.array(query_embedding)
+    use_vectorized = False
+    if similarity_fn is default_similarity_fn:
+        # Try vectorized cosine similarity (see base.py default logic)
+        try:
+            sim_values = np.dot(embeddings_np, query_embedding_np)
+            norm = np.linalg.norm(query_embedding_np) * np.linalg.norm(
+                embeddings_np, axis=1
+            )
+            sim_values = sim_values / norm
+            use_vectorized = True
+        except Exception:
+            use_vectorized = False
+
+    for i, emb_id in enumerate(embedding_ids):
+        if use_vectorized:
+            similarity = sim_values[i]
+        else:
+            similarity = similarity_fn(query_embedding, embeddings[i])
+        embed_similarity[emb_id] = similarity
+        candidate_score = similarity * threshold
+        if candidate_score > score:
+            high_score_id = emb_id
+            score = candidate_score
 
     results: List[Tuple[Any, Any]] = []
 
     embedding_length = len(embeddings or [])
     similarity_top_k_count = similarity_top_k or embedding_length
-    while len(results) < min(similarity_top_k_count, embedding_length):
+    while (
+        len(results) < min(similarity_top_k_count, embedding_length)
+        and high_score_id is not None
+    ):
         # Calculate the similarity score the for the leading one.
         results.append((score, high_score_id))
 
@@ -144,19 +194,27 @@ def get_top_k_mmr_embeddings(
         score = -math.inf
 
         # Iterate through results to find high score
+        high_score_id = None
+
         for embed_id in embed_map:
-            overlap_with_recent = similarity_fn(
-                embeddings[embed_map[embed_id]],
-                embeddings[full_embed_map[recent_embedding_id]],
-            )
-            if (
-                threshold * embed_similarity[embed_id]
-                - ((1 - threshold) * overlap_with_recent)
-                > score
-            ):
-                score = threshold * embed_similarity[embed_id] - (
-                    (1 - threshold) * overlap_with_recent
+            idx = full_embed_map[embed_id]
+            recent_idx = full_embed_map[recent_embedding_id]
+            if use_vectorized:
+                overlap_with_recent = np.dot(
+                    embeddings_np[idx], embeddings_np[recent_idx]
+                ) / (
+                    np.linalg.norm(embeddings_np[idx])
+                    * np.linalg.norm(embeddings_np[recent_idx])
                 )
+            else:
+                overlap_with_recent = similarity_fn(
+                    embeddings[idx], embeddings[recent_idx]
+                )
+            candidate_score = threshold * embed_similarity[embed_id] - (
+                (1 - threshold) * overlap_with_recent
+            )
+            if candidate_score > score:
+                score = candidate_score
                 high_score_id = embed_id
 
     result_similarities = [s for s, _ in results]

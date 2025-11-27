@@ -97,7 +97,7 @@ class SimpleVectorStore(VectorStore):
 
     def __init__(
         self,
-        data: Optional[SimpleVectorStoreData] = None,
+        data: Optional["SimpleVectorStoreData"] = None,
         fs: Optional[fsspec.AbstractFileSystem] = None,
         **kwargs: Any,
     ) -> None:
@@ -231,50 +231,52 @@ class SimpleVectorStore(VectorStore):
         query_filter_fn = _build_metadata_filter_fn(
             lambda node_id: self._data.metadata_dict[node_id], query.filters
         )
+        node_ids = query.node_ids
+        embedding_dict = self._data.embedding_dict
 
-        if query.node_ids is not None:
-            available_ids = set(query.node_ids)
-
-            def node_filter_fn(node_id: str) -> bool:
-                return node_id in available_ids
+        # Precompute node filter once
+        if node_ids is not None:
+            available_ids = set(node_ids)
+            def combined_node_filter(node_id: str) -> bool:
+                return node_id in available_ids and query_filter_fn(node_id)
 
         else:
+            def combined_node_filter(node_id: str) -> bool:
+                return query_filter_fn(node_id)
 
-            def node_filter_fn(node_id: str) -> bool:
-                return True
+        # Filter nodes and collect embeddings in a single pass
+        filtered_node_ids = []
+        filtered_embeddings = []
+        for node_id, embedding in embedding_dict.items():
+            if combined_node_filter(node_id):
+                filtered_node_ids.append(node_id)
+                filtered_embeddings.append(embedding)
 
-        node_ids = []
-        embeddings = []
-        # TODO: consolidate with get_query_text_embedding_similarities
-        for node_id, embedding in self._data.embedding_dict.items():
-            if node_filter_fn(node_id) and query_filter_fn(node_id):
-                node_ids.append(node_id)
-                embeddings.append(embedding)
 
         query_embedding = cast(List[float], query.query_embedding)
 
         if query.mode in LEARNER_MODES:
             top_similarities, top_ids = get_top_k_embeddings_learner(
                 query_embedding,
-                embeddings,
+                filtered_embeddings,
                 similarity_top_k=query.similarity_top_k,
-                embedding_ids=node_ids,
+                embedding_ids=filtered_node_ids,
             )
         elif query.mode == MMR_MODE:
             mmr_threshold = kwargs.get("mmr_threshold", None)
             top_similarities, top_ids = get_top_k_mmr_embeddings(
                 query_embedding,
-                embeddings,
+                filtered_embeddings,
                 similarity_top_k=query.similarity_top_k,
-                embedding_ids=node_ids,
+                embedding_ids=filtered_node_ids,
                 mmr_threshold=mmr_threshold,
             )
         elif query.mode == VectorStoreQueryMode.DEFAULT:
             top_similarities, top_ids = get_top_k_embeddings(
                 query_embedding,
-                embeddings,
+                filtered_embeddings,
                 similarity_top_k=query.similarity_top_k,
-                embedding_ids=node_ids,
+                embedding_ids=filtered_node_ids,
             )
         else:
             raise ValueError(f"Invalid query mode: {query.mode}")
