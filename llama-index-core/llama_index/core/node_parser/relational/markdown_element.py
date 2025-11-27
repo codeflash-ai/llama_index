@@ -14,23 +14,49 @@ def md_to_df(md_str: str) -> pd.DataFrame:
     # Replace " by "" in md_str
     md_str = md_str.replace('"', '""')
 
-    # Replace markdown pipe tables with commas
-    md_str = md_str.replace("|", '","')
-
     # Remove the second line (table header separator)
     lines = md_str.split("\n")
-    md_str = "\n".join(lines[:1] + lines[2:])
 
-    # Remove the first and last second char of the line (the pipes, transformed to ",")
-    lines = md_str.split("\n")
-    md_str = "\n".join([line[2:-2] for line in lines])
-
-    # Check if the table is empty
-    if len(md_str) == 0:
+    # If the input does not follow markdown pipe table, bail out early (empty or not enough lines)
+    if not lines or len(lines) < 2:
         return None
 
-    # Use pandas to read the CSV string into a DataFrame
-    return pd.read_csv(StringIO(md_str))
+    # Remove the second line (table header separator)
+    del lines[1]
+
+    # Process all lines to replace markdown table pipes with expected CSV
+    # - Assumption: each line starts and ends with pipes (|), so the valid items are between
+    #   Remove first 2 and last 2 chars as done originally after replacement
+    #   Also, do not rebuild md_str until after transformation
+
+    processed_lines = []
+    for line in lines:
+        # Replace "|" with '","' efficiently, then cut first two and last two chars
+        # As an additional safety for tables that may not have leading/trailing pipes,
+        # fall back gracefully to empty string if line too short
+        csv_line = line.replace("|", '","')
+        if len(csv_line) >= 4:
+            csv_line = csv_line[2:-2]
+        else:
+            csv_line = ''
+        processed_lines.append(csv_line)
+
+    md_str = "\n".join(processed_lines)
+
+    # Check if the table is empty
+    if not md_str:
+        return None
+
+    # Avoid pandas parsing being a bottleneck by disabling automatic dtype inference
+    # - For markdown document tables, all fields are strings, so force string dtype
+    # - Also, specify quoting only as needed (already double quoted in conversion)
+    try:
+        # Quoting minimal, separator default
+        # For speed, let pandas guess column names; do not pass extra arguments
+        return pd.read_csv(StringIO(md_str), dtype=str, engine='c', quoting=pd.io.common.csv.QUOTE_MINIMAL)
+    except Exception:
+        # In case of unexpected parse errors, return None as before
+        return None
 
 
 class MarkdownElementNodeParser(BaseElementNodeParser):
