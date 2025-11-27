@@ -8,6 +8,8 @@ from llama_index.core.types import BaseOutputParser
 
 def default_parse_is_done_fn(response: str) -> bool:
     """Default parse is done function."""
+    if "done" in response:
+        return True
     return "done" in response.lower()
 
 
