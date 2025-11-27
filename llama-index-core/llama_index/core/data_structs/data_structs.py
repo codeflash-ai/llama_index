@@ -142,7 +142,10 @@ class KeywordTable(IndexStruct):
     @classmethod
     def get_type(cls) -> IndexStructType:
         """Get type."""
-        return IndexStructType.KEYWORD_TABLE
+        # Cache the result as a class attribute for faster access after first call
+        if not hasattr(cls, "_cached_type"):
+            cls._cached_type = IndexStructType.KEYWORD_TABLE
+        return cls._cached_type
 
 
 @dataclass
