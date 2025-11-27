@@ -105,12 +105,12 @@ class BaseKeywordTableIndex(BaseIndex[KeywordTable]):
         ] = KeywordTableRetrieverMode.DEFAULT,
         **kwargs: Any,
     ) -> BaseRetriever:
-        # NOTE: lazy import
-        from llama_index.core.indices.keyword_table.retrievers import (
+        # Import retriever classes once and cache them
+        (
             KeywordTableGPTRetriever,
             KeywordTableRAKERetriever,
             KeywordTableSimpleRetriever,
-        )
+        ) = _get_keyword_table_retrievers()
 
         if retriever_mode == KeywordTableRetrieverMode.DEFAULT:
             return KeywordTableGPTRetriever(
@@ -247,6 +247,26 @@ class KeywordTableIndex(BaseKeywordTableIndex):
             text=text,
         )
         return extract_keywords_given_response(response, start_token="KEYWORDS:")
+
+
+# Efficient lazy import and caching for retrievers to avoid repeated import cost.
+def _get_keyword_table_retrievers():
+    try:
+        return _get_keyword_table_retrievers.cache
+    except AttributeError:
+        from llama_index.core.indices.keyword_table.retrievers import (
+            KeywordTableGPTRetriever,
+            KeywordTableRAKERetriever,
+            KeywordTableSimpleRetriever,
+        )
+
+        result = (
+            KeywordTableGPTRetriever,
+            KeywordTableRAKERetriever,
+            KeywordTableSimpleRetriever,
+        )
+        _get_keyword_table_retrievers.cache = result
+        return result
 
 
 # legacy
