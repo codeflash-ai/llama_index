@@ -17,6 +17,8 @@ class TokenCounter:
     def __init__(self, tokenizer: Optional[Callable[[str], list]] = None) -> None:
         self.tokenizer = tokenizer or get_tokenizer()
 
+        self._token_cache: Dict[str, int] = {}
+
     def get_string_tokens(self, string: str) -> int:
         """Get the token count for a string.
 
@@ -26,7 +28,13 @@ class TokenCounter:
         Returns:
             int: The token count.
         """
-        return len(self.tokenizer(string))
+        # Cache results on a per-string basis to avoid redundant encoding (especially for repeated data)
+        cached = self._token_cache.get(string)
+        if cached is not None:
+            return cached
+        tokens = len(self.tokenizer(string))
+        self._token_cache[string] = tokens
+        return tokens
 
     def estimate_tokens_in_messages(self, messages: List[ChatMessage]) -> int:
         """Estimate token count for a single message.
