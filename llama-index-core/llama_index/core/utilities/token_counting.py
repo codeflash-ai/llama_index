@@ -39,28 +39,44 @@ class TokenCounter:
         """
         tokens = 0
 
+
+        get_string_tokens = self.get_string_tokens  # Localize for performance
+
+        # Avoid dict copy unless needed, cache function_call presence, and avoid repeated attribute access
+        MessageRole_FUNCTION = MessageRole.FUNCTION
+
         for message in messages:
-            if message.role:
-                tokens += self.get_string_tokens(message.role)
+            role = message.role
+            content = message.content
+            additional_kwargs = message.additional_kwargs
 
-            if message.content:
-                tokens += self.get_string_tokens(message.content)
+            # Pre-compute per-message token additions and possible role
+            if role:
+                tokens += get_string_tokens(role)
 
-            additional_kwargs = {**message.additional_kwargs}
+            if content:
+                tokens += get_string_tokens(content)
+
+            # Fast path: avoid creating dictionary copy for most messages
 
             if "function_call" in additional_kwargs:
-                function_call = additional_kwargs.pop("function_call")
-                if function_call.get("name", None) is not None:
-                    tokens += self.get_string_tokens(function_call["name"])
+                function_call = additional_kwargs["function_call"]
 
-                if function_call.get("arguments", None) is not None:
-                    tokens += self.get_string_tokens(function_call["arguments"])
+                name = function_call.get("name")
+                if name is not None:
+                    tokens += get_string_tokens(name)
+
+                arguments = function_call.get("arguments")
+                if arguments is not None:
+                    tokens += get_string_tokens(arguments)
+
 
                 tokens += 3  # Additional tokens for function call
 
             tokens += 3  # Add three per message
 
-            if message.role == MessageRole.FUNCTION:
+            # Check for FUNCTION role and adjust
+            if role == MessageRole_FUNCTION:
                 tokens -= 2  # Subtract 2 if role is "function"
 
         return tokens
