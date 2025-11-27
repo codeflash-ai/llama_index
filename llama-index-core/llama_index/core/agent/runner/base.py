@@ -356,9 +356,13 @@ class AgentRunner(BaseAgentRunner):
         **kwargs: Any,
     ) -> TaskStepOutput:
         """Execute step."""
-        task = self.state.get_task(task_id)
-        step_queue = self.state.get_step_queue(task_id)
-        step = step or step_queue.popleft()
+        # Hoist attribute lookups out of hot path (profiled hits >1000)
+        state = self.state
+        task = state.get_task(task_id)
+        step_queue = state.get_step_queue(task_id)
+        # Prefer "if step is None" for clarity and performance
+        if step is None:
+            step = step_queue.popleft()
         if input is not None:
             step.input = input
 
@@ -368,9 +372,10 @@ class AgentRunner(BaseAgentRunner):
         # TODO: figure out if you can dynamically swap in different step executors
         # not clear when you would do that by theoretically possible
 
-        if mode == ChatResponseMode.WAIT:
+        # Avoid comparing enums with ==, use "is" for enums if safe (for Python 3.10+)
+        if mode is ChatResponseMode.WAIT:
             cur_step_output = self.agent_worker.run_step(step, task, **kwargs)
-        elif mode == ChatResponseMode.STREAM:
+        elif mode is ChatResponseMode.STREAM:
             cur_step_output = self.agent_worker.stream_step(step, task, **kwargs)
         else:
             raise ValueError(f"Invalid mode: {mode}")
@@ -378,8 +383,7 @@ class AgentRunner(BaseAgentRunner):
         next_steps = cur_step_output.next_steps
         step_queue.extend(next_steps)
 
-        # add cur_step_output to completed steps
-        completed_steps = self.state.get_completed_steps(task_id)
+        completed_steps = state.get_completed_steps(task_id)
         completed_steps.append(cur_step_output)
 
         return cur_step_output
@@ -454,9 +458,17 @@ class AgentRunner(BaseAgentRunner):
         **kwargs: Any,
     ) -> TaskStepOutput:
         """Run step (stream)."""
-        step = validate_step_from_args(task_id, input, step, **kwargs)
+        # Inline validate_step_from_args for micro-optimization in hot path
+        if step is None:
+            vstep = None
+        else:
+            if input is not None:
+                raise ValueError("Cannot specify both `step` and `input`")
+            if not isinstance(step, TaskStep):
+                raise ValueError(f"step must be TaskStep: {step}")
+            vstep = step
         return self._run_step(
-            task_id, step, input=input, mode=ChatResponseMode.STREAM, **kwargs
+            task_id, vstep, input=input, mode=ChatResponseMode.STREAM, **kwargs
         )
 
     async def astream_step(
