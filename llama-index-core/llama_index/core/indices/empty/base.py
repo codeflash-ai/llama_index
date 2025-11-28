@@ -40,14 +40,15 @@ class EmptyIndex(BaseIndex[EmptyIndexStruct]):
         """Initialize params."""
         super().__init__(
             nodes=None,
-            index_struct=index_struct or EmptyIndexStruct(),
+            index_struct=index_struct if index_struct is not None else EmptyIndexStruct(),
             service_context=service_context,
             **kwargs,
         )
 
     def as_retriever(self, **kwargs: Any) -> BaseRetriever:
         # NOTE: lazy import
-        from llama_index.core.indices.empty.retrievers import EmptyIndexRetriever
+        from llama_index.core.indices.empty.retrievers import \
+            EmptyIndexRetriever
 
         return EmptyIndexRetriever(self)
 
