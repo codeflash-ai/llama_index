@@ -209,26 +209,25 @@ class NLStructStoreQueryEngine(BaseQueryEngine):
         if self._sql_context_container.context_str is not None:
             tables_desc_str = self._sql_context_container.context_str
         else:
-            table_desc_list = []
             context_dict = self._sql_context_container.context_dict
             if context_dict is None:
                 raise ValueError(
                     "context_dict must be provided. There is currently no "
                     "table context."
                 )
-            for table_desc in context_dict.values():
-                table_desc_list.append(table_desc)
-            tables_desc_str = "\n\n".join(table_desc_list)
+            # Improved: join dict values directly, reduces memory usage and overhead
+            tables_desc_str = "\n\n".join(context_dict.values())
+
 
         return tables_desc_str
 
     def _run_with_sql_only_check(self, sql_query_str: str) -> Tuple[str, Dict]:
         """Don't run sql if sql_only is true, else continue with normal path."""
-        if self._sql_only:
+        if not self._sql_only:
+            raw_response_str, metadata = self._sql_database.run_sql(sql_query_str)
+        else:
             metadata: Dict[str, Any] = {}
             raw_response_str = sql_query_str
-        else:
-            raw_response_str, metadata = self._sql_database.run_sql(sql_query_str)
 
         return raw_response_str, metadata
 
