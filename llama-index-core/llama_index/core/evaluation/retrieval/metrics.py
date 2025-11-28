@@ -51,8 +51,9 @@ class MRR(BaseRetrievalMetric):
         """Compute metric."""
         if retrieved_ids is None or expected_ids is None:
             raise ValueError("Retrieved ids and expected ids must be provided")
+        expected_ids_set = set(expected_ids)
         for i, id in enumerate(retrieved_ids):
-            if id in expected_ids:
+            if id in expected_ids_set:
                 return RetrievalMetricResult(
                     score=1.0 / (i + 1),
                 )
