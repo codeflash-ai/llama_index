@@ -19,9 +19,7 @@ from llama_index.core.agent.react.output_parser import ReActOutputParser
 from llama_index.core.agent.react.types import (
     ActionReasoningStep,
     BaseReasoningStep,
-    ObservationReasoningStep,
-    ResponseReasoningStep,
-)
+    ObservationReasoningStep)
 from llama_index.core.agent.types import BaseAgent
 from llama_index.core.base.llms.types import MessageRole
 from llama_index.core.callbacks import (
@@ -246,15 +244,22 @@ class ReActAgent(BaseAgent):
         current_reasoning: List[BaseReasoningStep],
     ) -> AgentChatResponse:
         """Get response from reasoning steps."""
-        if len(current_reasoning) == 0:
+        length = len(current_reasoning)
+        if length == 0:
             raise ValueError("No reasoning steps were taken.")
-        elif len(current_reasoning) == self._max_iterations:
+        elif length == self._max_iterations:
             raise ValueError("Reached max iterations.")
 
-        response_step = cast(ResponseReasoningStep, current_reasoning[-1])
+        # Access current_reasoning[-1] directly (cast is a no-op at runtime for performance)
+        response_step = current_reasoning[-1]
+        # Cast only the response_step.response attribute, not the whole object, for best speed
+        # But since type hints are for static checking only, we can keep code as direct access
 
-        # TODO: add sources from reasoning steps
-        return AgentChatResponse(response=response_step.response, sources=self.sources)
+        response_value = response_step.response
+        sources = self.sources
+
+        # Construct AgentChatResponse locally to avoid multiple attribute lookups
+        return AgentChatResponse(response=response_value, sources=sources)
 
     def _infer_stream_chunk_is_final(self, chunk: ChatResponse) -> bool:
         """Infers if a chunk from a live stream is the start of the final
