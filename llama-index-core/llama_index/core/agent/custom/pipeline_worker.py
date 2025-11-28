@@ -38,13 +38,14 @@ DEFAULT_MODEL_NAME = "gpt-3.5-turbo-0613"
 def _get_agent_components(query_component: QueryComponent) -> List[BaseAgentComponent]:
     """Get agent components."""
     agent_components: List[BaseAgentComponent] = []
-    for c in query_component.sub_query_components:
-        if isinstance(c, BaseAgentComponent):
-            agent_components.append(cast(BaseAgentComponent, c))
-
-        if len(c.sub_query_components) > 0:
-            agent_components.extend(_get_agent_components(c))
-
+    stack = [query_component]
+    while stack:
+        current_component = stack.pop()
+        for c in current_component.sub_query_components:
+            if isinstance(c, BaseAgentComponent):
+                agent_components.append(cast(BaseAgentComponent, c))
+            if c.sub_query_components:
+                stack.append(c)
     return agent_components
 
 
