@@ -27,11 +27,10 @@ from llama_index.core.types import BaseOutputParser
 
 def _build_choices_text(choices: Sequence[ToolMetadata]) -> str:
     """Convert sequence of metadata to enumeration text."""
-    texts: List[str] = []
-    for ind, choice in enumerate(choices):
-        text = " ".join(choice.description.splitlines())
-        text = f"({ind + 1}) {text}"  # to one indexing
-        texts.append(text)
+    texts: List[str] = [
+        f"({ind + 1}) {' '.join(choice.description.splitlines())}"
+        for ind, choice in enumerate(choices)
+    ]
     return "\n\n".join(texts)
 
 
