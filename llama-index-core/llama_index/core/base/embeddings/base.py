@@ -38,14 +38,21 @@ def similarity(
     mode: SimilarityMode = SimilarityMode.DEFAULT,
 ) -> float:
     """Get embedding similarity."""
-    if mode == SimilarityMode.EUCLIDEAN:
+    # Avoid repeated conversion between list and numpy array
+    arr1 = np.asarray(embedding1)
+    arr2 = np.asarray(embedding2)
+    if mode == "SimilarityMode.EUCLIDEAN":
         # Using -euclidean distance as similarity to achieve same ranking order
-        return -float(np.linalg.norm(np.array(embedding1) - np.array(embedding2)))
-    elif mode == SimilarityMode.DOT_PRODUCT:
-        return np.dot(embedding1, embedding2)
+        return -float(np.linalg.norm(arr1 - arr2))
+    elif mode == "SimilarityMode.DOT_PRODUCT":
+        # np.dot on arrays is already optimal
+        return float(np.dot(arr1, arr2))
     else:
-        product = np.dot(embedding1, embedding2)
-        norm = np.linalg.norm(embedding1) * np.linalg.norm(embedding2)
+        # Use fast fused operations for norm calculation
+        product = float(np.dot(arr1, arr2))
+        norm1 = np.dot(arr1, arr1)
+        norm2 = np.dot(arr2, arr2)
+        norm = (norm1 * norm2) ** 0.5
         return product / norm
 
 

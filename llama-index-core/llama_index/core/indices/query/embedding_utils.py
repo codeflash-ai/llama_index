@@ -22,6 +22,49 @@ def get_top_k_embeddings(
 
     similarity_fn = similarity_fn or default_similarity_fn
 
+    # Fast path for default similarity function using numpy vectorization
+    if similarity_fn is default_similarity_fn:
+        query_embedding_np = np.asarray(query_embedding)
+        embeddings_np = np.asarray(embeddings)
+
+        if (
+            query_embedding_np.ndim == 1
+            and embeddings_np.ndim == 2
+            and embeddings_np.shape[1] == query_embedding_np.shape[0]
+        ):
+            # Vectorized cosine similarity calculation
+            product = np.dot(embeddings_np, query_embedding_np)
+            norm_emb = np.linalg.norm(embeddings_np, axis=1)
+            norm_q = np.linalg.norm(query_embedding_np)
+            similarities = product / (norm_emb * norm_q + 1e-12)
+
+            # Apply similarity cutoff filtering
+            if similarity_cutoff is not None:
+                mask = similarities > similarity_cutoff
+                similarities = similarities[mask]
+                ids = np.array(embedding_ids)[mask]
+            else:
+                ids = np.array(embedding_ids)
+
+            # Apply top-k selection
+            if (
+                similarity_top_k is not None
+                and similarity_top_k > 0
+                and len(similarities) > similarity_top_k
+            ):
+                topk_idx = np.argpartition(-similarities, similarity_top_k - 1)[
+                    :similarity_top_k
+                ]
+                sorted_idx = topk_idx[np.argsort(-similarities[topk_idx])]
+                result_similarities = similarities[sorted_idx].tolist()
+                result_ids = ids[sorted_idx].tolist()
+            else:
+                sorted_idx = np.argsort(-similarities)
+                result_similarities = similarities[sorted_idx].tolist()
+                result_ids = ids[sorted_idx].tolist()
+            return result_similarities, result_ids
+
+    # Fallback to original heap-based approach
     embeddings_np = np.array(embeddings)
     query_embedding_np = np.array(query_embedding)
 
