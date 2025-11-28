@@ -195,34 +195,28 @@ class PairwiseComparisonEvaluator(BaseEvaluator):
         eval_result.pairwise_source = EvaluationSource.ORIGINAL
         flipped_eval_result.pairwise_source = EvaluationSource.FLIPPED
 
-        # count the votes for each of the 2 answers
-        votes_1 = 0.0
-        votes_2 = 0.0
-        if eval_result.score is not None and flipped_eval_result.score is not None:
-            votes_1 = eval_result.score + (1 - flipped_eval_result.score)
-            votes_2 = (1 - eval_result.score) + flipped_eval_result.score
+        # Compute votes with minimal branching and variable setup
+        score_1 = eval_result.score
+        score_2 = flipped_eval_result.score
+
+        if score_1 is not None and score_2 is not None:
+            votes_1 = score_1 + (1 - score_2)
+            votes_2 = (1 - score_1) + score_2
+        else:
+            votes_1 = 0.0
+            votes_2 = 0.0
+
 
         if votes_1 + votes_2 != 2:  # each round, the judge can give a total of 1 vote
             raise ValueError("Impossible score results. Total amount of votes is 2.")
 
-        # get the judges (original and flipped) who voted for answer_1
-        voters_1 = [eval_result] * (eval_result.score == 1.0) + [
-            flipped_eval_result
-        ] * (flipped_eval_result.score == 0.0)
-
-        # get the judges (original and flipped) who voted for answer_2
-        voters_2 = [eval_result] * (eval_result.score == 0.0) + [
-            flipped_eval_result
-        ] * (flipped_eval_result.score == 1.0)
-
         if votes_1 > votes_2:
-            return voters_1[0]  # return any voter for answer_1
+            return eval_result if score_1 == 1.0 else flipped_eval_result
         elif votes_2 > votes_1:
-            return voters_2[0]  # return any vote for answer_2
+            return eval_result if score_1 == 0.0 else flipped_eval_result
         else:
-            if (
-                eval_result.score == 0.5
-            ):  # votes_1 == votes_2 can only happen if both are 1.0 (so actual tie)
+            # If score is exactly 0.5 (tie), just return eval_result.
+            if score_1 == 0.5:
                 # doesn't matter which one we return here
                 return eval_result
             else:  # Inconclusive case!
@@ -253,7 +247,9 @@ class PairwiseComparisonEvaluator(BaseEvaluator):
                 "query, response, second_response, and reference must be provided"
             )
 
-        await asyncio.sleep(sleep_time_in_seconds)
+        if sleep_time_in_seconds:
+            await asyncio.sleep(sleep_time_in_seconds)
+
 
         eval_result = await self._get_eval_result(
             query, response, second_response, reference
