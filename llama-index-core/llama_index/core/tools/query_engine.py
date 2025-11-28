@@ -42,10 +42,15 @@ class QueryEngineTool(AsyncBaseTool):
         description: Optional[str] = None,
         resolve_input_errors: bool = True,
     ) -> "QueryEngineTool":
-        name = name or DEFAULT_NAME
-        description = description or DEFAULT_DESCRIPTION
-
-        metadata = ToolMetadata(name=name, description=description)
+        # Inline initialization avoids additional intermediate variables and faster short-circuit
+        if name is None and description is None:
+            metadata = ToolMetadata(name=DEFAULT_NAME, description=DEFAULT_DESCRIPTION)
+        elif name is None:
+            metadata = ToolMetadata(name=DEFAULT_NAME, description=description)
+        elif description is None:
+            metadata = ToolMetadata(name=name, description=DEFAULT_DESCRIPTION)
+        else:
+            metadata = ToolMetadata(name=name, description=description)
         return cls(
             query_engine=query_engine,
             metadata=metadata,
