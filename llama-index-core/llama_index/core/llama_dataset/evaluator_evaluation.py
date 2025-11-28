@@ -275,15 +275,19 @@ class PairwiseEvaluatorPredictionDataset(BaseLlamaPredictionDataset):
 
     def to_pandas(self) -> PandasDataFrame:
         """Create pandas dataframe."""
-        data = {}
-        if self.predictions:
-            data = {
-                "feedback": [t.feedback for t in self.predictions],
-                "score": [t.score for t in self.predictions],
-                "ordering": [t.evaluation_source.value for t in self.predictions],
+        # Optimize by constructing data as a list of dicts and use PandasDataFrame.from_records
+        predictions = self.predictions
+        if not predictions:
+            return PandasDataFrame({})
+        records = [
+            {
+                "feedback": t.feedback,
+                "score": t.score,
+                "ordering": t.evaluation_source.value
             }
-
-        return PandasDataFrame(data)
+            for t in predictions
+        ]
+        return PandasDataFrame.from_records(records)
 
     @property
     def class_name(self) -> str:
