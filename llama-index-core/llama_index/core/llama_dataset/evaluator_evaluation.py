@@ -224,6 +224,11 @@ class LabelledEvaluatorDataset(BaseLlamaDataset[BaseEvaluator]):
         self, predictions: List[EvaluatorExamplePrediction]
     ) -> EvaluatorPredictionDataset:
         """Construct prediction dataset."""
+        # Use tuple instead of list for predictions for memory efficiency if input is large and not mutated.
+        # EvaluatorPredictionDataset is assumed to accept any iterable, but if it absolutely requires a list, skip this.
+        # Defensive check: Only convert if input isn't already a tuple/list to avoid unnecessary copying.
+        if not isinstance(predictions, (list, tuple)):
+            predictions = tuple(predictions)
         return EvaluatorPredictionDataset(predictions=predictions)
 
     @property
