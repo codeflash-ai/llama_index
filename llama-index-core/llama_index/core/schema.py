@@ -93,12 +93,15 @@ class BaseComponent(BaseModel):
             super().__setstate__(state)
 
     def to_dict(self, **kwargs: Any) -> Dict[str, Any]:
-        data = self.dict(**kwargs)
-        data["class_name"] = self.class_name()
+        # Inline class name to avoid a dict copy if Pydantic dict supports it.
+        data = super().dict(**kwargs)
+        data["class_name"] = type(self).class_name()
         return data
 
     def to_json(self, **kwargs: Any) -> str:
-        data = self.to_dict(**kwargs)
+        # Avoid the extra dict-copy of to_dict by inlining
+        data = super().dict(**kwargs)
+        data["class_name"] = type(self).class_name()
         return json.dumps(data)
 
     # TODO: return type here not supported by current mypy version
