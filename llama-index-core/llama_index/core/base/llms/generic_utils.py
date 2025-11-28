@@ -303,9 +303,15 @@ def get_from_param_or_env(
     """Get a value from a param or an environment variable."""
     if param is not None:
         return param
-    elif env_key and env_key in os.environ and os.environ[env_key]:
-        return os.environ[env_key]
-    elif default is not None:
+
+    # Optimize environment variable access by reducing repeated lookups.
+    # Localizing os.environ improves performance in tight loops.
+    if env_key:
+        env_value = os.environ.get(env_key)
+        if env_value:
+            return env_value
+
+    if default is not None:
         return default
     else:
         raise ValueError(
