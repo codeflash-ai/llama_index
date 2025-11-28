@@ -163,22 +163,20 @@ class CallbackManager(BaseCallbackHandler, ABC):
         # create event context wrapper
         event = EventContext(self, event_type, event_id=event_id)
         event.on_start(payload=payload)
-
-        payload = None
         try:
             yield event
         except Exception as e:
             # data already logged to trace?
             if not hasattr(e, "event_added"):
-                payload = {EventPayload.EXCEPTION: e}
+                payload_exc = {EventPayload.EXCEPTION: e}
                 e.event_added = True  # type: ignore
                 if not event.finished:
-                    event.on_end(payload=payload)
+                    event.on_end(payload=payload_exc)
             raise
         finally:
             # ensure event is ended
             if not event.finished:
-                event.on_end(payload=payload)
+                event.on_end()
 
     @contextmanager
     def as_trace(self, trace_id: str) -> Generator[None, None, None]:

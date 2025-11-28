@@ -1,6 +1,6 @@
 """Sentence splitter."""
 from dataclasses import dataclass
-from typing import Callable, List, Optional, Tuple
+from typing import Dict, Callable, List, Optional, Tuple
 
 from llama_index.core.bridge.pydantic import Field, PrivateAttr
 from llama_index.core.callbacks.base import CallbackManager
@@ -189,7 +189,8 @@ class SentenceSplitter(MetadataAwareTextSplitter):
         return chunks
 
     def _split(self, text: str, chunk_size: int) -> List[_Split]:
-        r"""Break text into splits that are smaller than chunk size.
+        """Break text into splits that are smaller than chunk size.
+
 
         The order of splitting is:
         1. split by paragraph separator
@@ -199,20 +200,26 @@ class SentenceSplitter(MetadataAwareTextSplitter):
 
         """
         token_size = self._token_size(text)
-        if self._token_size(text) <= chunk_size:
+        if token_size <= chunk_size:
             return [_Split(text, is_sentence=True, token_size=token_size)]
 
         text_splits_by_fns, is_sentence = self._get_splits_by_fns(text)
 
         text_splits = []
+        token_size_map: Dict[str, int] = {}
+
         for text_split_by_fns in text_splits_by_fns:
-            token_size = self._token_size(text_split_by_fns)
-            if token_size <= chunk_size:
+            if text_split_by_fns in token_size_map:
+                ts = token_size_map[text_split_by_fns]
+            else:
+                ts = self._token_size(text_split_by_fns)
+                token_size_map[text_split_by_fns] = ts
+            if ts <= chunk_size:
                 text_splits.append(
                     _Split(
                         text_split_by_fns,
                         is_sentence=is_sentence,
-                        token_size=token_size,
+                        token_size=ts,
                     )
                 )
             else:
@@ -233,7 +240,8 @@ class SentenceSplitter(MetadataAwareTextSplitter):
         def close_chunk() -> None:
             nonlocal chunks, cur_chunk, last_chunk, cur_chunk_len, new_chunk
 
-            chunks.append("".join([text for text, length in cur_chunk]))
+            # Use a generator rather than list comprehension for join (minor memory perf gain)
+            chunks.append("".join(text for text, length in cur_chunk))
             last_chunk = cur_chunk
             cur_chunk = []
             cur_chunk_len = 0
@@ -256,8 +264,10 @@ class SentenceSplitter(MetadataAwareTextSplitter):
                     cur_chunk.insert(0, (text, length))
                     last_index -= 1
 
-        while len(splits) > 0:
-            cur_split = splits[0]
+        idx = 0
+        splits_len = len(splits)
+        while idx < splits_len:
+            cur_split = splits[idx]
             if cur_split.token_size > chunk_size:
                 raise ValueError("Single token exceeded chunk size")
             if cur_chunk_len + cur_split.token_size > chunk_size and not new_chunk:
@@ -272,7 +282,7 @@ class SentenceSplitter(MetadataAwareTextSplitter):
                     # add split to chunk
                     cur_chunk_len += cur_split.token_size
                     cur_chunk.append((cur_split.text, cur_split.token_size))
-                    splits.pop(0)
+                    idx += 1
                     new_chunk = False
                 else:
                     # close out chunk
@@ -280,7 +290,7 @@ class SentenceSplitter(MetadataAwareTextSplitter):
 
         # handle the last chunk
         if not new_chunk:
-            chunk = "".join([text for text, length in cur_chunk])
+            chunk = "".join(text for text, length in cur_chunk)
             chunks.append(chunk)
 
         # run postprocessing to remove blank spaces
