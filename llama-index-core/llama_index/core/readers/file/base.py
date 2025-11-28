@@ -16,6 +16,8 @@ from llama_index.core.readers.base import BaseReader
 from llama_index.core.schema import Document
 from tqdm import tqdm
 
+_local_fs_instance = LocalFileSystem()
+
 
 def _try_loading_included_file_formats() -> Dict[str, Type[BaseReader]]:
     try:
@@ -32,6 +34,8 @@ def _try_loading_included_file_formats() -> Dict[str, Type[BaseReader]]:
             PptxReader,
             VideoAudioReader,
         )  # pants: no-infer-dep
+        
+        _local_fs_instance: LocalFileSystem = LocalFileSystem()
     except ImportError:
         raise ImportError("`llama-index-readers-file` package not found")
 
@@ -104,7 +108,8 @@ class _DefaultFileMetadataFunc:
 
 
 def get_default_fs() -> fsspec.AbstractFileSystem:
-    return LocalFileSystem()
+    # Directly return the pre-instantiated local file system object for efficiency
+    return _local_fs_instance
 
 
 def is_default_fs(fs: fsspec.AbstractFileSystem) -> bool:
