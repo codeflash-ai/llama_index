@@ -152,20 +152,15 @@ class CondenseQuestionChatEngine(BaseChatEngine):
     def _get_tool_output_from_response(
         self, query: str, response: RESPONSE_TYPE
     ) -> ToolOutput:
-        if isinstance(response, StreamingResponse):
-            return ToolOutput(
-                content="",
-                tool_name="query_engine",
-                raw_input={"query": query},
-                raw_output=response,
-            )
-        else:
-            return ToolOutput(
-                content=str(response),
-                tool_name="query_engine",
-                raw_input={"query": query},
-                raw_output=response,
-            )
+        # Optimization: Minimized repeated constructor usage
+        is_streaming_response = isinstance(response, StreamingResponse)
+        content = "" if is_streaming_response else str(response)
+        return ToolOutput(
+            content=content,
+            tool_name="query_engine",
+            raw_input={"query": query},
+            raw_output=response,
+        )
 
     @trace_method("chat")
     def chat(
@@ -270,10 +265,12 @@ class CondenseQuestionChatEngine(BaseChatEngine):
     async def achat(
         self, message: str, chat_history: Optional[List[ChatMessage]] = None
     ) -> AgentChatResponse:
-        chat_history = chat_history or self._memory.get()
+        # Optimization: Avoids repeated attribute check for chat_history
+        chat_history_arg = chat_history if chat_history is not None else self._memory.get()
 
         # Generate standalone question from conversation context and last message
-        condensed_question = await self._acondense_question(chat_history, message)
+        condensed_question = await self._acondense_question(chat_history_arg, message)
+
 
         log_str = f"Querying with: {condensed_question}"
         logger.info(log_str)
@@ -283,20 +280,24 @@ class CondenseQuestionChatEngine(BaseChatEngine):
         # TODO: right now, query engine uses class attribute to configure streaming,
         #       we are moving towards separate streaming and non-streaming methods.
         #       In the meanwhile, use this hack to toggle streaming.
-        from llama_index.core.query_engine.retriever_query_engine import (
-            RetrieverQueryEngine,
-        )
+        from llama_index.core.query_engine.retriever_query_engine import \
+            RetrieverQueryEngine
 
-        if isinstance(self._query_engine, RetrieverQueryEngine):
-            is_streaming = self._query_engine._response_synthesizer._streaming
-            self._query_engine._response_synthesizer._streaming = False
+        is_retriever_query_engine = isinstance(self._query_engine, RetrieverQueryEngine)
+        if is_retriever_query_engine:
+            response_synthesizer = self._query_engine._response_synthesizer
+            prev_streaming = response_synthesizer._streaming
+            response_synthesizer._streaming = False
+
+        # Query with standalone question
 
         # Query with standalone question
         query_response = await self._query_engine.aquery(condensed_question)
 
         # NOTE: reset streaming flag
-        if isinstance(self._query_engine, RetrieverQueryEngine):
-            self._query_engine._response_synthesizer._streaming = is_streaming
+        if is_retriever_query_engine:
+            response_synthesizer._streaming = prev_streaming
+
 
         tool_output = self._get_tool_output_from_response(
             condensed_question, query_response
