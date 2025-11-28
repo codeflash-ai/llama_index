@@ -96,19 +96,19 @@ class VectorIndexAutoRetriever(BaseAutoRetriever):
         self._vector_store_info = vector_store_info
         self._default_empty_query_vector = default_empty_query_vector
 
-        service_context = service_context or self._index.service_context
-        self._llm = llm or llm_from_settings_or_context(Settings, service_context)
+        # Avoid repeated attribute lookups
+        idx_service_context = self._index.service_context
+        svc_ctx = service_context or idx_service_context
+        self._llm = llm or llm_from_settings_or_context(Settings, svc_ctx)
         callback_manager = (
             callback_manager
-            or callback_manager_from_settings_or_context(Settings, service_context)
+            or callback_manager_from_settings_or_context(Settings, svc_ctx)
         )
 
-        # prompt
-        prompt_template_str = (
-            prompt_template_str or DEFAULT_VECTOR_STORE_QUERY_PROMPT_TMPL
-        )
+        prompt_str = prompt_template_str or DEFAULT_VECTOR_STORE_QUERY_PROMPT_TMPL
         self._output_parser = VectorStoreQueryOutputParser()
-        self._prompt = PromptTemplate(template=prompt_template_str)
+        self._prompt = PromptTemplate(template=prompt_str)
+
 
         # additional config
         self._max_top_k = max_top_k
@@ -120,18 +120,23 @@ class VectorIndexAutoRetriever(BaseAutoRetriever):
             raise ValueError("extra_filters cannot be OR condition")
         self._extra_filters = extra_filters or MetadataFilters(filters=[])
         self._kwargs = kwargs
+        # Cache the object_map to avoid repeated attribute access
+        obj_map = object_map if object_map is not None else self._index._object_map
         super().__init__(
             callback_manager=callback_manager,
-            object_map=object_map or self._index._object_map,
+            object_map=obj_map,
             objects=objects,
             verbose=verbose,
         )
 
+
+        # Cache prompt dict for _get_prompts
+        self._prompts_cache: PromptDictType = {"prompt": self._prompt}
+
     def _get_prompts(self) -> PromptDictType:
         """Get prompts."""
-        return {
-            "prompt": self._prompt,
-        }
+        # Return cached prompt dict to avoid repeated dict construction
+        return self._prompts_cache
 
     def _update_prompts(self, prompts: PromptDictType) -> None:
         """Get prompt modules."""
