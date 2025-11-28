@@ -4,6 +4,7 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 from sqlalchemy import MetaData, create_engine, insert, inspect, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import OperationalError, ProgrammingError
+from itertools import chain
 
 
 class SQLDatabase:
@@ -58,12 +59,12 @@ class SQLDatabase:
 
         self._inspector = inspect(self._engine)
 
-        # including view support by adding the views as well as tables to the all
-        # tables list if view_support is True
-        self._all_tables = set(
-            self._inspector.get_table_names(schema=schema)
-            + (self._inspector.get_view_names(schema=schema) if view_support else [])
+        # Generate all tables and optionally all views efficiently
+        table_names = self._inspector.get_table_names(schema=schema)
+        view_names = (
+            self._inspector.get_view_names(schema=schema) if view_support else []
         )
+        self._all_tables = set(chain(table_names, view_names))
 
         self._include_tables = set(include_tables) if include_tables else set()
         if self._include_tables:
@@ -217,14 +218,13 @@ class SQLDatabase:
                 result = cursor.fetchall()
                 # truncate the results to the max string length
                 # we can't use str(result) directly because it automatically truncates long strings
-                truncated_results = []
-                for row in result:
-                    # truncate each column, then convert the row to a tuple
-                    truncated_row = tuple(
+                truncated_results = [
+                    tuple(
                         self.truncate_word(column, length=self._max_string_length)
                         for column in row
                     )
-                    truncated_results.append(truncated_row)
+                    for row in result
+                ]
                 return str(truncated_results), {
                     "result": truncated_results,
                     "col_keys": list(cursor.keys()),
