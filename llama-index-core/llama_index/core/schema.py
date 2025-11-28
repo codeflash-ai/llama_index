@@ -410,23 +410,38 @@ class TextNode(BaseNode):
         if mode == MetadataMode.NONE:
             return ""
 
-        usable_metadata_keys = set(self.metadata.keys())
-        if mode == MetadataMode.LLM:
-            for key in self.excluded_llm_metadata_keys:
-                if key in usable_metadata_keys:
-                    usable_metadata_keys.remove(key)
-        elif mode == MetadataMode.EMBED:
-            for key in self.excluded_embed_metadata_keys:
-                if key in usable_metadata_keys:
-                    usable_metadata_keys.remove(key)
+        # Avoid repeated lookups and unnecessary set operations.
+        metadata = self.metadata
+        if not metadata:
+            return ""
 
-        return self.metadata_seperator.join(
-            [
-                self.metadata_template.format(key=key, value=str(value))
-                for key, value in self.metadata.items()
-                if key in usable_metadata_keys
-            ]
-        )
+        # Precompute excluded keys based on the mode; this reduces set operations per attribute
+        if mode == MetadataMode.LLM:
+            excluded_keys = set(self.excluded_llm_metadata_keys)
+        elif mode == MetadataMode.EMBED:
+            excluded_keys = set(self.excluded_embed_metadata_keys)
+        else:
+            excluded_keys = set()
+
+        metadata_template = self.metadata_template
+        metadata_seperator = self.metadata_seperator
+
+        # Fast path if there are no excluded keys
+        if not excluded_keys:
+            # keys() iteration is stable with items() so no need to store keys separately
+            return metadata_seperator.join(
+                [metadata_template.format(key=key, value=str(value))
+                 for key, value in metadata.items()]
+            )
+        else:
+            # Filter out excluded keys directly in the comprehension, more cache-friendly
+            return metadata_seperator.join(
+                [
+                    metadata_template.format(key=key, value=str(value))
+                    for key, value in metadata.items()
+                    if key not in excluded_keys
+                ]
+            )
 
     def set_content(self, value: str) -> None:
         """Set the content of the node."""
