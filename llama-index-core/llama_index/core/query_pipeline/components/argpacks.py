@@ -42,11 +42,11 @@ class ArgPackComponent(QueryComponent):
     def _run_component(self, **kwargs: Any) -> Any:
         """Run component."""
         # combine all lists into one
-        output = []
-        for v in kwargs.values():
-            if self.convert_fn is not None:
-                v = self.convert_fn(v)
-            output.append(v)
+        convert_fn = self.convert_fn
+        if convert_fn is not None:
+            output = [convert_fn(v) for v in kwargs.values()]
+        else:
+            output = list(kwargs.values())
         return {"output": output}
 
     async def _arun_component(self, **kwargs: Any) -> Any:
