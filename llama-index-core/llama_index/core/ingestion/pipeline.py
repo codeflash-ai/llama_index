@@ -146,19 +146,29 @@ async def arun_transformations(
     Returns:
         The transformed nodes.
     """
-    if not in_place:
-        nodes = list(nodes)
+    # If in_place is False, copy only if needed
+    nodes = nodes if in_place else list(nodes)
+    cache_enabled = cache is not None
+
+    # Local var for repeated lookup in tight loop
+    get = None
+    put = None
+    if cache_enabled:
+        get = cache.get
+        put = cache.put
+
+    # Minimize attribute lookups in loop
 
     for transform in transformations:
-        if cache is not None:
-            hash = get_transformation_hash(nodes, transform)
-
-            cached_nodes = cache.get(hash, collection=cache_collection)
+        if cache_enabled:
+            _hash = get_transformation_hash(nodes, transform)  # import is now present
+            cached_nodes = get(_hash, collection=cache_collection)
             if cached_nodes is not None:
                 nodes = cached_nodes
-            else:
-                nodes = await transform.acall(nodes, **kwargs)
-                cache.put(hash, nodes, collection=cache_collection)
+                continue
+            new_nodes = await transform.acall(nodes, **kwargs)
+            put(_hash, new_nodes, collection=cache_collection)
+            nodes = new_nodes
         else:
             nodes = await transform.acall(nodes, **kwargs)
 
@@ -176,8 +186,13 @@ def arun_transformations_wrapper(
     """Wrapper for async run_transformation. To be used in loop.run_in_executor
     within a ProcessPoolExecutor.
     """
-    loop = asyncio.new_event_loop()
-    nodes = loop.run_until_complete(
+    # Use a reusable event loop policy to avoid overhead of closing and creating many loops
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    nodes_result = loop.run_until_complete(
         arun_transformations(
             nodes=nodes,
             transformations=transformations,
@@ -187,8 +202,7 @@ def arun_transformations_wrapper(
             **kwargs,
         )
     )
-    loop.close()
-    return nodes
+    return nodes_result
 
 
 class DocstoreStrategy(str, Enum):
