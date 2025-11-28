@@ -189,7 +189,8 @@ class SentenceSplitter(MetadataAwareTextSplitter):
         return chunks
 
     def _split(self, text: str, chunk_size: int) -> List[_Split]:
-        r"""Break text into splits that are smaller than chunk size.
+        """Break text into splits that are smaller than chunk size.
+
 
         The order of splitting is:
         1. split by paragraph separator
@@ -199,28 +200,49 @@ class SentenceSplitter(MetadataAwareTextSplitter):
 
         """
         token_size = self._token_size(text)
-        if self._token_size(text) <= chunk_size:
+        if token_size <= chunk_size:
             return [_Split(text, is_sentence=True, token_size=token_size)]
 
         text_splits_by_fns, is_sentence = self._get_splits_by_fns(text)
 
-        text_splits = []
-        for text_split_by_fns in text_splits_by_fns:
-            token_size = self._token_size(text_split_by_fns)
-            if token_size <= chunk_size:
-                text_splits.append(
+        # Directly use a stack for iterative splitting instead of recursion for performance and lower memory use
+        result: List[_Split] = []
+        stack: List[Tuple[str, bool]] = [(split, is_sentence) for split in text_splits_by_fns]
+
+        token_size_cache = {}
+        while stack:
+            curr_text, curr_is_sentence = stack.pop()
+            if curr_text in token_size_cache:
+                curr_token_size = token_size_cache[curr_text]
+            else:
+                curr_token_size = self._token_size(curr_text)
+                token_size_cache[curr_text] = curr_token_size
+            if curr_token_size <= chunk_size:
+                result.append(
                     _Split(
-                        text_split_by_fns,
-                        is_sentence=is_sentence,
-                        token_size=token_size,
+                        curr_text,
+                        is_sentence=curr_is_sentence,
+                        token_size=curr_token_size,
                     )
                 )
             else:
-                recursive_text_splits = self._split(
-                    text_split_by_fns, chunk_size=chunk_size
-                )
-                text_splits.extend(recursive_text_splits)
-        return text_splits
+                # Only call _get_splits_by_fns for this sub-text (no direct recursion)
+                sub_splits, sub_is_sentence = self._get_splits_by_fns(curr_text)
+                # If cannot split further, fall back to appending (avoid infinite splitting)
+                if len(sub_splits) == 1:
+                    result.append(
+                        _Split(
+                            curr_text,
+                            is_sentence=curr_is_sentence,
+                            token_size=curr_token_size,
+                        )
+                    )
+                else:
+                    # Push new sub-splits on stack for further iterative processing
+                    stack.extend((split, sub_is_sentence) for split in sub_splits)
+        # Maintain order (reverse since stack pops last-in)
+        result.reverse()
+        return result
 
     def _merge(self, splits: List[_Split], chunk_size: int) -> List[str]:
         """Merge splits into chunks."""
@@ -306,11 +328,10 @@ class SentenceSplitter(MetadataAwareTextSplitter):
             splits = split_fn(text)
             if len(splits) > 1:
                 return splits, True
-                break
 
         for split_fn in self._sub_sentence_split_fns:
             splits = split_fn(text)
             if len(splits) > 1:
-                break
+                return splits, False
 
-        return splits, False
+        return [text], False
