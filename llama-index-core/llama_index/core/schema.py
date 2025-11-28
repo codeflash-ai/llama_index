@@ -437,7 +437,7 @@ class TextNode(BaseNode):
         return {"start": self.start_char_idx, "end": self.end_char_idx}
 
     def get_text(self) -> str:
-        return self.get_content(metadata_mode=MetadataMode.NONE)
+        return self.text
 
     @property
     def node_info(self) -> Dict[str, Any]:
