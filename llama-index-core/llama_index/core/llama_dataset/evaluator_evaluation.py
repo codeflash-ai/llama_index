@@ -176,17 +176,23 @@ class LabelledEvaluatorDataset(BaseLlamaDataset[BaseEvaluator]):
             )
         except Exception as err:
             # TODO: raise warning here as well
+            # TODO: raise warning here as well
+            err_str = f"Caught error {err!s}"
             return EvaluatorExamplePrediction(
-                invalid_prediction=True, invalid_reason=f"Caught error {err!s}"
+                invalid_prediction=True, invalid_reason=err_str
             )
 
-        if not eval_result.invalid_result:
+        invalid = eval_result.invalid_result
+        if not invalid:
+            feedback = eval_result.feedback
+            score = eval_result.score
             return EvaluatorExamplePrediction(
-                feedback=eval_result.feedback, score=eval_result.score
+                feedback=feedback, score=score
             )
         else:
+            invalid_reason = eval_result.invalid_reason
             return EvaluatorExamplePrediction(
-                invalid_prediction=True, invalid_reason=eval_result.invalid_reason
+                invalid_prediction=True, invalid_reason=invalid_reason
             )
 
     def _predict_example(
