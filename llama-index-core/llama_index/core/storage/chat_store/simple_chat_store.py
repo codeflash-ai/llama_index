@@ -37,9 +37,7 @@ class SimpleChatStore(BaseChatStore):
 
     def delete_messages(self, key: str) -> Optional[List[ChatMessage]]:
         """Delete messages for a key."""
-        if key not in self.store:
-            return None
-        return self.store.pop(key)
+        return self.store.pop(key, None)
 
     def delete_message(self, key: str, idx: int) -> Optional[ChatMessage]:
         """Delete specific message for a key."""
