@@ -111,6 +111,12 @@ class VectorIndexAutoRetriever(BaseAutoRetriever):
         self._prompt = PromptTemplate(template=prompt_template_str)
 
         # additional config
+
+        # Cache expensive serialization and schema construction for reuse
+        self._cached_info_str = vector_store_info.json(indent=4)
+        self._cached_schema_str = VectorStoreQuerySpec.schema_json(indent=4)
+
+        # additional config
         self._max_top_k = max_top_k
         self._similarity_top_k = similarity_top_k
         self._empty_query_top_k = empty_query_top_k
@@ -188,15 +194,12 @@ class VectorIndexAutoRetriever(BaseAutoRetriever):
     async def agenerate_retrieval_spec(
         self, query_bundle: QueryBundle, **kwargs: Any
     ) -> BaseModel:
-        # prepare input
-        info_str = self._vector_store_info.json(indent=4)
-        schema_str = VectorStoreQuerySpec.schema_json(indent=4)
 
         # call LLM
         output = await self._llm.apredict(
             self._prompt,
-            schema_str=schema_str,
-            info_str=info_str,
+            schema_str=self._cached_schema_str,
+            info_str=self._cached_info_str,
             query_str=query_bundle.query_str,
         )
 
