@@ -60,10 +60,11 @@ class SQLDatabase:
 
         # including view support by adding the views as well as tables to the all
         # tables list if view_support is True
-        self._all_tables = set(
-            self._inspector.get_table_names(schema=schema)
-            + (self._inspector.get_view_names(schema=schema) if view_support else [])
-        )
+        tables = self._inspector.get_table_names(schema=schema)
+        if view_support:
+            tables += self._inspector.get_view_names(schema=schema)
+        self._all_tables = set(tables)
+
 
         self._include_tables = set(include_tables) if include_tables else set()
         if self._include_tables:
@@ -79,8 +80,13 @@ class SQLDatabase:
                 raise ValueError(
                     f"ignore_tables {missing_tables} not found in database"
                 )
-        usable_tables = self.get_usable_table_names()
-        self._usable_tables = set(usable_tables) if usable_tables else self._all_tables
+        # Precompute _usable_tables for efficient sorted access
+        if self._include_tables:
+            self._usable_tables = set(self._include_tables)
+        else:
+            # Set difference is the hottest line, so compute once:
+            self._usable_tables = self._all_tables - self._ignore_tables
+
 
         if not isinstance(sample_rows_in_table_info, int):
             raise TypeError("sample_rows_in_table_info must be an integer")
@@ -139,9 +145,8 @@ class SQLDatabase:
 
     def get_usable_table_names(self) -> Iterable[str]:
         """Get names of tables available."""
-        if self._include_tables:
-            return sorted(self._include_tables)
-        return sorted(self._all_tables - self._ignore_tables)
+        # Optimize: sorted() of precomputed set instead of repeating set difference
+        return sorted(self._usable_tables)
 
     def get_table_columns(self, table_name: str) -> List[Any]:
         """Get table columns."""
