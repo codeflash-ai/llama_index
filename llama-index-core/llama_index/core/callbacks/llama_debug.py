@@ -108,9 +108,23 @@ class LlamaDebugHandler(BaseCallbackHandler):
         for event in events:
             event_pairs[event.id_].append(event)
 
+
+        # Precompute sort keys to avoid repeated datetime parsing of the same strings
+        sort_key_cache = {}
+        for v in event_pairs.values():
+            t = v[0].time
+            if t not in sort_key_cache:
+                # Use a try/except only if you previously observed time parsing errors;
+                # here we assume that time strings are always parseable.
+                sort_key_cache[t] = datetime.strptime(t, TIMESTAMP_FORMAT)
+
+        # Prepare a tuple list so that "sorted" only has to index, not call a lambda.
+        values = list(event_pairs.values())
+
+        # Use the cached parsed datetime sort keys for each group
         return sorted(
-            event_pairs.values(),
-            key=lambda x: datetime.strptime(x[0].time, TIMESTAMP_FORMAT),
+            values,
+            key=lambda x: sort_key_cache[x[0].time],
         )
 
     def _get_time_stats_from_event_pairs(
