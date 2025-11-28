@@ -96,33 +96,39 @@ class VectorIndexAutoRetriever(BaseAutoRetriever):
         self._vector_store_info = vector_store_info
         self._default_empty_query_vector = default_empty_query_vector
 
-        service_context = service_context or self._index.service_context
-        self._llm = llm or llm_from_settings_or_context(Settings, service_context)
-        callback_manager = (
+        service_context = service_context or index.service_context
+        # Cache attribute access (Settings, service_context) to local mostly for speed
+        local_settings = Settings
+        self._llm = llm or llm_from_settings_or_context(local_settings, service_context)
+        local_callback_manager = (
             callback_manager
-            or callback_manager_from_settings_or_context(Settings, service_context)
+            or callback_manager_from_settings_or_context(local_settings, service_context)
         )
 
-        # prompt
-        prompt_template_str = (
-            prompt_template_str or DEFAULT_VECTOR_STORE_QUERY_PROMPT_TMPL
-        )
+        # Use static or instance references for constant/likely-cached objects
+        self._prompt = PromptTemplate(template=prompt_template_str or DEFAULT_VECTOR_STORE_QUERY_PROMPT_TMPL)
         self._output_parser = VectorStoreQueryOutputParser()
-        self._prompt = PromptTemplate(template=prompt_template_str)
 
         # additional config
         self._max_top_k = max_top_k
         self._similarity_top_k = similarity_top_k
         self._empty_query_top_k = empty_query_top_k
         self._vector_store_query_mode = vector_store_query_mode
-        # if extra_filters is OR condition, we don't support that yet
-        if extra_filters is not None and extra_filters.condition == FilterCondition.OR:
+
+        # Pre-check for OR condition, raise error early for unsupported case
+        ef = extra_filters
+        if ef is not None and ef.condition == FilterCondition.OR:
             raise ValueError("extra_filters cannot be OR condition")
-        self._extra_filters = extra_filters or MetadataFilters(filters=[])
+        # Avoid constructing new objects if extra_filters valid and not None
+        self._extra_filters = ef if ef is not None else MetadataFilters(filters=[])
         self._kwargs = kwargs
+
+        # Avoid mutating input args; leverage direct dict or index._object_map if needed
+        selected_object_map = object_map if object_map is not None else index._object_map
+
         super().__init__(
-            callback_manager=callback_manager,
-            object_map=object_map or self._index._object_map,
+            callback_manager=local_callback_manager,
+            object_map=selected_object_map,
             objects=objects,
             verbose=verbose,
         )
@@ -145,8 +151,7 @@ class VectorIndexAutoRetriever(BaseAutoRetriever):
                 query_str="",
                 embedding=self._default_empty_query_vector,
             )
-        else:
-            return QueryBundle(query_str=query)
+        return QueryBundle(query_str=query)
 
     def _parse_generated_spec(
         self, output: str, query_bundle: QueryBundle
