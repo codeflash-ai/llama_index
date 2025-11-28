@@ -79,7 +79,7 @@ class ParallelAgentRunner(BaseAgentRunner):
         self,
         agent_worker: BaseAgentWorker,
         chat_history: Optional[List[ChatMessage]] = None,
-        state: Optional[DAGAgentState] = None,
+        state: Optional['DAGAgentState'] = None,
         memory: Optional[BaseMemory] = None,
         llm: Optional[LLM] = None,
         callback_manager: Optional[CallbackManager] = None,
@@ -180,14 +180,20 @@ class ParallelAgentRunner(BaseAgentRunner):
 
         """
         # first pop all steps from step_queue
+        # Efficiently pop all steps from step_queue into a list in a single loop
+        step_queue = self.state.get_step_queue(task_id)
         steps: List[TaskStep] = []
-        while len(self.state.get_step_queue(task_id)) > 0:
-            steps.append(self.state.get_step_queue(task_id).popleft())
+        steps_append = steps.append
+        step_queue_popleft = step_queue.popleft
+        len_step_queue = len(step_queue)
+        while len_step_queue > 0:
+            steps_append(step_queue_popleft())
+            len_step_queue -= 1
 
-        # take every item in the queue, and run it
-        tasks = []
-        for step in steps:
-            tasks.append(self._arun_step(task_id, step=step, mode=mode, **kwargs))
+        # Use list comprehension for gathering coroutines; avoids Python function call overhead and is usually faster
+        tasks = [self._arun_step(task_id, step=step, mode=mode, **kwargs) for step in steps]
+        if not tasks:
+            return []
 
         return await asyncio.gather(*tasks)
 
