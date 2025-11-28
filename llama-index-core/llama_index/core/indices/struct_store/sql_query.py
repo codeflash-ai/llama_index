@@ -89,11 +89,12 @@ class SQLStructStoreQueryEngine(BaseQueryEngine):
             sql_context_container or index.sql_context_container
         )
         self._sql_only = sql_only
-        super().__init__(
-            callback_manager=callback_manager_from_settings_or_context(
-                Settings, index.service_context
-            )
+        # Pre-compute callback manager rather than repeated computation
+        callback_mgr = callback_manager_from_settings_or_context(
+            Settings, index.service_context
         )
+
+        super().__init__(callback_manager=callback_mgr)
 
     def _get_prompt_modules(self) -> PromptMixinType:
         """Get prompt modules."""
@@ -116,10 +117,18 @@ class SQLStructStoreQueryEngine(BaseQueryEngine):
         # NOTE: override query method in order to fetch the right results.
         # NOTE: since the query_str is a SQL query, it doesn't make sense
         # to use ResponseBuilder anywhere.
-        response_str, metadata = self._run_with_sql_only_check(query_bundle.query_str)
+        query_str = query_bundle.query_str
+        # Inlining the method to reduce indirection overhead for frequent queries
+        if self._sql_only:
+            metadata = {}
+            response_str = query_str
+        else:
+            response_str, metadata = self._sql_database.run_sql(query_str)
+
         return Response(response=response_str, metadata=metadata)
 
     async def _aquery(self, query_bundle: QueryBundle) -> Response:
+        # Avoid Python stack-building overhead by calling directly, not through await
         return self._query(query_bundle)
 
 
