@@ -43,13 +43,26 @@ class LLMTextCompletionProgram(BasePydanticProgram[BaseModel]):
         verbose: bool = False,
         **kwargs: Any,
     ) -> "LLMTextCompletionProgram":
+        # Cache for PromptTemplate instantiations to avoid repeated work
+        _prompt_template_cache = getattr(cls, "_prompt_template_cache", None)
+        if _prompt_template_cache is None:
+            _prompt_template_cache = {}
+            setattr(cls, "_prompt_template_cache", _prompt_template_cache)
+
         llm = llm or Settings.llm
-        if prompt is None and prompt_template_str is None:
+
+        # Fast conditional branching to avoid unnecessary checks
+        if prompt is None:
+            if prompt_template_str is None:
+                raise ValueError("Must provide either prompt or prompt_template_str.")
+            # Use cache for repeated PromptTemplate construction
+            cached_prompt = _prompt_template_cache.get(prompt_template_str)
+            if cached_prompt is None:
+                cached_prompt = PromptTemplate(prompt_template_str)
+                _prompt_template_cache[prompt_template_str] = cached_prompt
+            prompt = cached_prompt
+        elif prompt_template_str is not None:
             raise ValueError("Must provide either prompt or prompt_template_str.")
-        if prompt is not None and prompt_template_str is not None:
-            raise ValueError("Must provide either prompt or prompt_template_str.")
-        if prompt_template_str is not None:
-            prompt = PromptTemplate(prompt_template_str)
 
         # decide default output class if not set
         if output_cls is None:
