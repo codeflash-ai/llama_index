@@ -58,8 +58,12 @@ class PydanticOutputParser(ChainableOutputParser):
 
     def parse(self, text: str) -> Any:
         """Parse, validate, and correct errors programmatically."""
-        json_str = extract_json_str(text)
-        return self._output_cls.parse_raw(json_str)
+        # Fast path: try to directly parse, then fallback to regex extract if error.
+        try:
+            return self._output_cls.parse_raw(text)
+        except Exception:
+            json_str = extract_json_str(text)
+            return self._output_cls.parse_raw(json_str)
 
     def format(self, query: str) -> str:
         """Format a query with structured output formatting instructions."""
