@@ -37,6 +37,7 @@ def _pydantic_output_to_selector_result(output: Any) -> SelectorResult:
 
 
 class PydanticSingleSelector(BaseSelector):
+
     def __init__(self, selector_program: BasePydanticProgram) -> None:
         self._selector_program = selector_program
 
@@ -48,23 +49,21 @@ class PydanticSingleSelector(BaseSelector):
         prompt_template_str: str = DEFAULT_SINGLE_PYD_SELECT_PROMPT_TMPL,
         verbose: bool = False,
     ) -> "PydanticSingleSelector":
-        try:
-            from llama_index.program.openai import (
-                OpenAIPydanticProgram,
-            )  # pants: no-infer-dep
-        except ImportError as e:
-            raise ImportError(
-                "`llama-index-program-openai` package is missing. "
-                "Please install using `pip install llama-index-program-openai`."
-            )
         if program is None:
+            try:
+                from llama_index.program.openai import \
+                    OpenAIPydanticProgram  # pants: no-infer-dep
+            except ImportError:
+                raise ImportError(
+                    "`llama-index-program-openai` package is missing. "
+                    "Please install using `pip install llama-index-program-openai`."
+                )
             program = OpenAIPydanticProgram.from_defaults(
                 output_cls=SingleSelection,
                 prompt_template_str=prompt_template_str,
                 llm=llm,
                 verbose=verbose,
             )
-
         return cls(selector_program=program)
 
     def _get_prompts(self) -> Dict[str, Any]:
