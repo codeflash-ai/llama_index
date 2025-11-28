@@ -36,7 +36,7 @@ class BaseQueryEngine(ChainableMixin, PromptMixin):
     def query(self, str_or_query_bundle: QueryType) -> RESPONSE_TYPE:
         with self.callback_manager.as_trace("query"):
             if isinstance(str_or_query_bundle, str):
-                str_or_query_bundle = QueryBundle(str_or_query_bundle)
+                return self._query(QueryBundle(str_or_query_bundle))
             return self._query(str_or_query_bundle)
 
     async def aquery(self, str_or_query_bundle: QueryType) -> RESPONSE_TYPE:

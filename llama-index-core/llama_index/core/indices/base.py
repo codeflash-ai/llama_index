@@ -70,14 +70,16 @@ class BaseIndex(Generic[IS], ABC):
             else:
                 raise ValueError("nodes must be a list of Node objects.")
 
-        self._storage_context = storage_context or StorageContext.from_defaults()
+        storage_context = storage_context or StorageContext.from_defaults()
+        self._storage_context = storage_context
         # deprecated
         self._service_context = service_context
 
-        self._docstore = self._storage_context.docstore
+        self._docstore = storage_context.docstore
         self._show_progress = show_progress
-        self._vector_store = self._storage_context.vector_store
-        self._graph_store = self._storage_context.graph_store
+        self._vector_store = storage_context.vector_store
+        self._graph_store = storage_context.graph_store
+
         self._callback_manager = (
             callback_manager
             or callback_manager_from_settings_or_context(Settings, service_context)
@@ -87,12 +89,16 @@ class BaseIndex(Generic[IS], ABC):
         self._object_map = {obj.index_id: obj.obj for obj in objects}
         with self._callback_manager.as_trace("index_construction"):
             if index_struct is None:
-                nodes = nodes or []
-                index_struct = self.build_index_from_nodes(
-                    nodes + objects  # type: ignore
-                )
+                # Only call nodes + objects if either is not empty
+                effective_nodes = []
+                if nodes:
+                    effective_nodes.extend(nodes)
+                if objects:
+                    # type: ignore for objects
+                    effective_nodes.extend(objects)  # type: ignore
+                index_struct = self.build_index_from_nodes(effective_nodes)
             self._index_struct = index_struct
-            self._storage_context.index_store.add_index_struct(self._index_struct)
+            storage_context.index_store.add_index_struct(self._index_struct)
 
         self._transformations = (
             transformations
@@ -382,7 +388,7 @@ class BaseIndex(Generic[IS], ABC):
         )
 
         retriever = self.as_retriever(**kwargs)
-        llm = (
+        llm_result = (
             resolve_llm(llm, callback_manager=self._callback_manager)
             if llm
             else llm_from_settings_or_context(Settings, self.service_context)
@@ -390,7 +396,7 @@ class BaseIndex(Generic[IS], ABC):
 
         return RetrieverQueryEngine.from_args(
             retriever,
-            llm=llm,
+            llm=llm_result,
             **kwargs,
         )
 
