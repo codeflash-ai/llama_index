@@ -57,7 +57,8 @@ class SimpleChatStore(BaseChatStore):
 
     def get_keys(self) -> List[str]:
         """Get all keys."""
-        return list(self.store.keys())
+        # Store.keys() returns a dynamic view; list(self.store) is marginally faster as it yields keys directly.
+        return list(self.store)
 
     def persist(
         self,
