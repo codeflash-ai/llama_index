@@ -125,7 +125,13 @@ class CondenseQuestionChatEngine(BaseChatEngine):
         """
         Generate standalone question from conversation context and last message.
         """
-        chat_history_str = messages_to_history_str(chat_history)
+        chat_history_str = "\n".join(
+            (
+                f"{msg.role.value}: {msg.content}"
+                + (f"\n{msg.additional_kwargs}" if msg.additional_kwargs else "")
+            )
+            for msg in chat_history
+        )
         logger.debug(chat_history_str)
 
         return self._llm.predict(
@@ -152,20 +158,14 @@ class CondenseQuestionChatEngine(BaseChatEngine):
     def _get_tool_output_from_response(
         self, query: str, response: RESPONSE_TYPE
     ) -> ToolOutput:
-        if isinstance(response, StreamingResponse):
-            return ToolOutput(
-                content="",
-                tool_name="query_engine",
-                raw_input={"query": query},
-                raw_output=response,
-            )
-        else:
-            return ToolOutput(
-                content=str(response),
-                tool_name="query_engine",
-                raw_input={"query": query},
-                raw_output=response,
-            )
+        # No unnecessary branching or conversion - optimize by consolidation
+        content = "" if isinstance(response, StreamingResponse) else str(response)
+        return ToolOutput(
+            content=content,
+            tool_name="query_engine",
+            raw_input={"query": query},
+            raw_output=response,
+        )
 
     @trace_method("chat")
     def chat(
@@ -228,9 +228,8 @@ class CondenseQuestionChatEngine(BaseChatEngine):
         # TODO: right now, query engine uses class attribute to configure streaming,
         #       we are moving towards separate streaming and non-streaming methods.
         #       In the meanwhile, use this hack to toggle streaming.
-        from llama_index.core.query_engine.retriever_query_engine import (
-            RetrieverQueryEngine,
-        )
+        from llama_index.core.query_engine.retriever_query_engine import \
+            RetrieverQueryEngine
 
         if isinstance(self._query_engine, RetrieverQueryEngine):
             is_streaming = self._query_engine._response_synthesizer._streaming
