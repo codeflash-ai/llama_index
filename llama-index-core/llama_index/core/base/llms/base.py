@@ -34,9 +34,9 @@ class BaseLLM(ChainableMixin, BaseComponent):
 
     @validator("callback_manager", pre=True)
     def _validate_callback_manager(cls, v: CallbackManager) -> CallbackManager:
-        if v is None:
-            return CallbackManager([])
-        return v
+        if v is not None:
+            return v
+        return CallbackManager()
 
     @property
     @abstractmethod
