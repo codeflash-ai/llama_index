@@ -134,11 +134,16 @@ class Playground:
         """
         print(f"\033[1mQuery:\033[0m\n{query_text}\n")
         result = []
-        for i, index in enumerate(self._indices):
-            for retriever_mode in self._retriever_modes[type(index)]:
-                start_time = time.time()
+        indices = self._indices
+        retriever_modes_map = self._retriever_modes
+        index_colors = self.index_colors
 
-                index_name = type(index).__name__
+        for i, index in enumerate(indices):
+            index_class = type(index)
+            index_name = index_class.__name__
+            retriever_modes = retriever_modes_map[index_class]
+            for retriever_mode in retriever_modes:
+                start_time = time.time()
                 print_text(
                     f"\033[1m{index_name}\033[0m, retriever mode = {retriever_mode}",
                     end="\n",
@@ -160,7 +165,8 @@ class Playground:
                     continue
 
                 output = query_engine.query(query_text)
-                print_text(str(output), color=self.index_colors[str(i)], end="\n\n")
+                print_text(str(output), color=index_colors[str(i)], end="\n\n")
+
 
                 duration = time.time() - start_time
 
