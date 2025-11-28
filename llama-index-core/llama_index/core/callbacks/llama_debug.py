@@ -43,9 +43,9 @@ class LlamaDebugHandler(BaseCallbackHandler):
         self._trace_map: Dict[str, List[str]] = defaultdict(list)
         self.print_trace_on_end = print_trace_on_end
         event_starts_to_ignore = (
-            event_starts_to_ignore if event_starts_to_ignore else []
+            event_starts_to_ignore if event_starts_to_ignore is not None else []
         )
-        event_ends_to_ignore = event_ends_to_ignore if event_ends_to_ignore else []
+        event_ends_to_ignore = event_ends_to_ignore if event_ends_to_ignore is not None else []
         super().__init__(
             event_starts_to_ignore=event_starts_to_ignore,
             event_ends_to_ignore=event_ends_to_ignore,
@@ -98,8 +98,11 @@ class LlamaDebugHandler(BaseCallbackHandler):
     def get_events(self, event_type: Optional[CBEventType] = None) -> List[CBEvent]:
         """Get all events for a specific event type."""
         if event_type is not None:
-            return self._event_pairs_by_type[event_type]
-
+            # Avoid an actual defaultdict lookup if possible (slightly faster and avoids unnecessary default creation)
+            events = self._event_pairs_by_type.get(event_type)
+            if events is not None:
+                return events
+            return []
         return self._sequential_events
 
     def _get_event_pairs(self, events: List[CBEvent]) -> List[List[CBEvent]]:
