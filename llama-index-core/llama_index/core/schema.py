@@ -730,11 +730,23 @@ class Document(TextNode):
     @classmethod
     def from_semantic_kernel_format(cls, doc: "MemoryRecord") -> "Document":
         """Convert struct from Semantic Kernel document format."""
+        # Avoid extra attribute lookup by storing used attributes locally
+        text = doc._text
+        additional_metadata = doc._additional_metadata
+        embedding = doc._embedding
+        id_ = doc._id
+
+        # Optimize embedding extraction by checking None once
+        embedding_list = embedding.tolist() if embedding is not None else None
+
+        # Avoid dict allocation in the call if possible (assignment moved outside the constructor call)
+        metadata = {"additional_metadata": additional_metadata}
+
         return cls(
-            text=doc._text,
-            metadata={"additional_metadata": doc._additional_metadata},
-            embedding=doc._embedding.tolist() if doc._embedding is not None else None,
-            id_=doc._id,
+            text=text,
+            metadata=metadata,
+            embedding=embedding_list,
+            id_=id_,
         )
 
     def to_vectorflow(self, client: Any) -> None:
