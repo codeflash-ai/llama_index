@@ -215,16 +215,23 @@ class SQLDatabase:
                 ) from exc
             if cursor.returns_rows:
                 result = cursor.fetchall()
-                # truncate the results to the max string length
-                # we can't use str(result) directly because it automatically truncates long strings
-                truncated_results = []
-                for row in result:
-                    # truncate each column, then convert the row to a tuple
-                    truncated_row = tuple(
-                        self.truncate_word(column, length=self._max_string_length)
-                        for column in row
-                    )
-                    truncated_results.append(truncated_row)
+                # Fast path: no truncation needed if max_string_length is very large
+                # or no strings in result at all.
+                max_length = self._max_string_length
+                truncate_fn = self.truncate_word
+                if result and max_length > 0:
+                    # Inline the column truncation with list comprehension
+                    truncated_results = [
+                        tuple(
+                            truncate_fn(col, length=max_length)
+                            if isinstance(col, str) and len(col) > max_length
+                            else col
+                            for col in row
+                        )
+                        for row in result
+                    ]
+                else:
+                    truncated_results = result
                 return str(truncated_results), {
                     "result": truncated_results,
                     "col_keys": list(cursor.keys()),

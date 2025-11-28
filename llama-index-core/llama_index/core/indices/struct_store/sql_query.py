@@ -225,12 +225,8 @@ class NLStructStoreQueryEngine(BaseQueryEngine):
     def _run_with_sql_only_check(self, sql_query_str: str) -> Tuple[str, Dict]:
         """Don't run sql if sql_only is true, else continue with normal path."""
         if self._sql_only:
-            metadata: Dict[str, Any] = {}
-            raw_response_str = sql_query_str
-        else:
-            raw_response_str, metadata = self._sql_database.run_sql(sql_query_str)
-
-        return raw_response_str, metadata
+            return sql_query_str, {}
+        return self._sql_database.run_sql(sql_query_str)
 
     def _query(self, query_bundle: QueryBundle) -> Response:
         """Answer a query."""
