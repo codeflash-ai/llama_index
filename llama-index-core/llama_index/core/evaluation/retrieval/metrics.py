@@ -83,6 +83,12 @@ class CohereRerankRelevancyMetric(BaseRetrievalMetric):
             )
         try:
             from cohere import Client  # pants: no-infer-dep
+            
+            METRIC_REGISTRY: Dict[str, Type[BaseRetrievalMetric]] = {
+                "hit_rate": HitRate,
+                "mrr": MRR,
+                "cohere_rerank_relevancy": CohereRerankRelevancyMetric,
+            }
         except ImportError:
             raise ImportError(
                 "Cannot import cohere package, please `pip install cohere`."
@@ -136,8 +142,7 @@ METRIC_REGISTRY: Dict[str, Type[BaseRetrievalMetric]] = {
 
 def resolve_metrics(metrics: List[str]) -> List[Type[BaseRetrievalMetric]]:
     """Resolve metrics from list of metric names."""
-    for metric in metrics:
-        if metric not in METRIC_REGISTRY:
-            raise ValueError(f"Invalid metric name: {metric}")
-
-    return [METRIC_REGISTRY[metric] for metric in metrics]
+    try:
+        return [METRIC_REGISTRY[metric] for metric in metrics]
+    except KeyError as e:
+        raise ValueError(f"Invalid metric name: {e.args[0]}")
