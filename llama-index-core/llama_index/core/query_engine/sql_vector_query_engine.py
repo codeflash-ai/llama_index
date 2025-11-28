@@ -24,7 +24,7 @@ from llama_index.core.query_engine.sql_join_query_engine import (
 from llama_index.core.selectors.llm_selectors import LLMSingleSelector
 from llama_index.core.selectors.pydantic_selectors import PydanticSingleSelector
 from llama_index.core.service_context import ServiceContext
-from llama_index.core.tools.query_engine import QueryEngineTool
+from llama_index.core.tools.query_engine import ToolMetadata, QueryEngineTool
 
 logger = logging.getLogger(__name__)
 
@@ -166,12 +166,15 @@ class SQLAutoVectorQueryEngine(SQLJoinQueryEngine):
                 Selector to use.
 
         """
-        sql_query_tool = QueryEngineTool.from_defaults(
-            sql_query_engine, name=sql_tool_name, description=sql_tool_description
+        # Avoid use of from_defaults (its logic is not needed when all args provided)
+        sql_query_metadata = ToolMetadata(name=sql_tool_name, description=sql_tool_description)
+        sql_query_tool = QueryEngineTool(
+            query_engine=sql_query_engine,
+            metadata=sql_query_metadata,
         )
-        vector_query_tool = QueryEngineTool.from_defaults(
-            vector_auto_retriever,
-            name=vector_tool_name,
-            description=vector_tool_description,
+        vector_query_metadata = ToolMetadata(name=vector_tool_name, description=vector_tool_description)
+        vector_query_tool = QueryEngineTool(
+            query_engine=vector_auto_retriever,
+            metadata=vector_query_metadata,
         )
         return cls(sql_query_tool, vector_query_tool, selector, **kwargs)
