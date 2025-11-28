@@ -401,31 +401,41 @@ class TextNode(BaseNode):
         if not metadata_str:
             return self.text
 
-        return self.text_template.format(
-            content=self.text, metadata_str=metadata_str
-        ).strip()
+        if self.text_template == DEFAULT_TEXT_NODE_TMPL:
+            return f"{metadata_str}\n\n{self.text}".strip()
+        else:
+            return self.text_template.format(
+                content=self.text, metadata_str=metadata_str
+            ).strip()
 
     def get_metadata_str(self, mode: MetadataMode = MetadataMode.ALL) -> str:
         """Metadata info string."""
         if mode == MetadataMode.NONE:
             return ""
-
-        usable_metadata_keys = set(self.metadata.keys())
         if mode == MetadataMode.LLM:
-            for key in self.excluded_llm_metadata_keys:
-                if key in usable_metadata_keys:
-                    usable_metadata_keys.remove(key)
+            excluded = set(self.excluded_llm_metadata_keys)
         elif mode == MetadataMode.EMBED:
-            for key in self.excluded_embed_metadata_keys:
-                if key in usable_metadata_keys:
-                    usable_metadata_keys.remove(key)
+            excluded = set(self.excluded_embed_metadata_keys)
+        else:
+            excluded = None
+
+        # Avoid constructing 'usable_metadata_keys' set and using 'if key in'
+        # Use generator expression for efficient filtering in join
+        if excluded is not None:
+            items = (
+                (key, value)
+                for key, value in self.metadata.items()
+                if key not in excluded
+            )
+        else:
+            items = self.metadata.items()
+
+        # Preallocate list with minimal overhead, format in generator
+        # This reduces time spent on list construction/profiled as bottleneck
 
         return self.metadata_seperator.join(
-            [
-                self.metadata_template.format(key=key, value=str(value))
-                for key, value in self.metadata.items()
-                if key in usable_metadata_keys
-            ]
+            self.metadata_template.format(key=key, value=str(value))
+            for key, value in items
         )
 
     def set_content(self, value: str) -> None:
