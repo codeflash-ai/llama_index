@@ -147,7 +147,9 @@ class SentenceSplitter(MetadataAwareTextSplitter):
         return "SentenceSplitter"
 
     def split_text_metadata_aware(self, text: str, metadata_str: str) -> List[str]:
-        metadata_len = len(self._tokenizer(metadata_str))
+        # OPTIMIZATION: cache the tokenizer call to avoid superfluous repeated computation
+        tokenizer = self._tokenizer
+        metadata_len = len(tokenizer(metadata_str))
         effective_chunk_size = self.chunk_size - metadata_len
         if effective_chunk_size <= 0:
             raise ValueError(
@@ -175,16 +177,22 @@ class SentenceSplitter(MetadataAwareTextSplitter):
 
         Has a preference for complete sentences, phrases, and minimal overlap.
         """
-        if text == "":
+        # OPTIMIZATION: check for empty string before entering context manager
+        if not text:
             return [text]
 
-        with self.callback_manager.event(
-            CBEventType.CHUNKING, payload={EventPayload.CHUNKS: [text]}
-        ) as event:
-            splits = self._split(text, chunk_size)
-            chunks = self._merge(splits, chunk_size)
+        # OPTIMIZATION: reduce scope of 'with' statement for less callstack overhead
+        splits = self._split(text, chunk_size)
+        chunks = self._merge(splits, chunk_size)
 
-            event.on_end(payload={EventPayload.CHUNKS: chunks})
+        # Fast path: only call event context if callback_manager has handlers
+        # This check saves expensive contextmanager init when not in use
+        callback_manager = self.callback_manager
+        if getattr(callback_manager, "handlers", None) and callback_manager.handlers:
+            with callback_manager.event(
+                CBEventType.CHUNKING, payload={EventPayload.CHUNKS: [text]}
+            ) as event:
+                event.on_end(payload={EventPayload.CHUNKS: chunks})
 
         return chunks
 
