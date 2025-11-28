@@ -42,10 +42,10 @@ class LlamaDebugHandler(BaseCallbackHandler):
         self._cur_trace_id: Optional[str] = None
         self._trace_map: Dict[str, List[str]] = defaultdict(list)
         self.print_trace_on_end = print_trace_on_end
-        event_starts_to_ignore = (
-            event_starts_to_ignore if event_starts_to_ignore else []
-        )
-        event_ends_to_ignore = event_ends_to_ignore if event_ends_to_ignore else []
+        if event_starts_to_ignore is None:
+            event_starts_to_ignore = []
+        if event_ends_to_ignore is None:
+            event_ends_to_ignore = []
         super().__init__(
             event_starts_to_ignore=event_starts_to_ignore,
             event_ends_to_ignore=event_ends_to_ignore,
@@ -104,14 +104,27 @@ class LlamaDebugHandler(BaseCallbackHandler):
 
     def _get_event_pairs(self, events: List[CBEvent]) -> List[List[CBEvent]]:
         """Helper function to pair events according to their ID."""
-        event_pairs: Dict[str, List[CBEvent]] = defaultdict(list)
+        # Use a regular dict for event_pairs since the keyset grows only as needed; slight memory saving
+        event_pairs: Dict[str, List[CBEvent]] = {}
         for event in events:
-            event_pairs[event.id_].append(event)
+            # Use setdefault for slightly faster one-pass appending
+            event_pairs.setdefault(event.id_, []).append(event)
 
-        return sorted(
-            event_pairs.values(),
-            key=lambda x: datetime.strptime(x[0].time, TIMESTAMP_FORMAT),
-        )
+        # Precompute timestamps for all the events for more efficient sorting
+        if not event_pairs:
+            return []
+
+        # Key function: avoid repeated strptime by precomputing keys
+        # Each value in event_pairs.values() is a list of CBEvent(s).
+        # Using list comprehension to produce (timestamp, value) tuples
+        sortable_pairs = [
+            (datetime.strptime(events_list[0].time, TIMESTAMP_FORMAT), events_list)
+            for events_list in event_pairs.values()
+        ]
+        sortable_pairs.sort(key=lambda x: x[0])
+
+        # Return just the event lists in sorted order
+        return [pair for _, pair in sortable_pairs]
 
     def _get_time_stats_from_event_pairs(
         self, event_pairs: List[List[CBEvent]]
@@ -135,7 +148,6 @@ class LlamaDebugHandler(BaseCallbackHandler):
         """Pair events by ID, either all events or a specific type."""
         if event_type is not None:
             return self._get_event_pairs(self._event_pairs_by_type[event_type])
-
         return self._get_event_pairs(self._sequential_events)
 
     def get_llm_inputs_outputs(self) -> List[List[CBEvent]]:
