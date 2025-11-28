@@ -14,6 +14,8 @@ from llama_index.core.prompts.mixin import PromptDictType
 from llama_index.core.schema import Document
 from llama_index.core.settings import Settings, llm_from_settings_or_context
 
+_pattern = re.compile(r"([\s\S]+)\[RESULT\]\s*([\d.]+)")
+
 DEFAULT_EVAL_TEMPLATE = PromptTemplate(
     "Your task is to evaluate if the retrieved context from the document sources are relevant to the query.\n"
     "The evaluation should be performed in a step-by-step manner by answering the following questions:\n"
@@ -46,12 +48,9 @@ DEFAULT_REFINE_TEMPLATE = PromptTemplate(
 
 
 def _default_parser_function(output_str: str) -> Tuple[Optional[float], Optional[str]]:
-    # Pattern to match the feedback and response
-    # This pattern looks for any text ending with '[RESULT]' followed by a number
-    pattern = r"([\s\S]+)(?:\[RESULT\]\s*)([\d.]+)"
+    # Use pre-compiled pattern for faster matching
+    result = _pattern.search(output_str)
 
-    # Using regex to find all matches
-    result = re.search(pattern, output_str)
 
     # Check if any match is found
     if result:
