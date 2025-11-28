@@ -96,11 +96,11 @@ class ReActAgentWorker(BaseAgentWorker):
 
         if len(tools) > 0 and tool_retriever is not None:
             raise ValueError("Cannot specify both tools and tool_retriever")
-        elif len(tools) > 0:
+        if len(tools) > 0:
             self._get_tools = lambda _: tools
         elif tool_retriever is not None:
             tool_retriever_c = cast(ObjectRetriever[BaseTool], tool_retriever)
-            self._get_tools = lambda message: tool_retriever_c.retrieve(message)
+            self._get_tools = tool_retriever_c.retrieve
         else:
             self._get_tools = lambda _: []
 
@@ -178,7 +178,7 @@ class ReActAgentWorker(BaseAgentWorker):
 
     def get_tools(self, input: str) -> List[AsyncBaseTool]:
         """Get tools."""
-        return [adapt_to_async_tool(t) for t in self._get_tools(input)]
+        return list(map(adapt_to_async_tool, self._get_tools(input)))
 
     def _extract_reasoning_step(
         self, output: ChatResponse, is_streaming: bool = False
