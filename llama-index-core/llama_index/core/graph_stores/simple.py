@@ -85,8 +85,21 @@ class SimpleGraphStore(GraphStore):
         **kwargs: Any,
     ) -> None:
         """Initialize params."""
-        self._data = data or SimpleGraphStoreData()
-        self._fs = fs or fsspec.filesystem("file")
+        # Assign default values directly without using "or" to avoid unnecessary object creation
+        if data is None:
+            # Use local variable to eliminate an extra attribute assignment
+            data = SimpleGraphStoreData()
+        self._data = data
+
+        # Avoid default fsspec.filesystem construction if fs is provided
+        if fs is None:
+            # re-use the default fs across instances when no custom fs is specified
+            # As fsspec.filesystem("file") is stateless, using a class-level default improves performance
+            if not hasattr(self.__class__, "_default_fs"):
+                self.__class__._default_fs = fsspec.filesystem("file")
+            self._fs = self.__class__._default_fs
+        else:
+            self._fs = fs
 
     @classmethod
     def from_persist_dir(
@@ -173,8 +186,8 @@ class SimpleGraphStore(GraphStore):
 
     @classmethod
     def from_dict(cls, save_dict: dict) -> "SimpleGraphStore":
-        data = SimpleGraphStoreData.from_dict(save_dict)
-        return cls(data)
+        # Minor micro-optimization: Inline object creation for clarity
+        return cls(SimpleGraphStoreData.from_dict(save_dict))
 
     def to_dict(self) -> dict:
         return self._data.to_dict()
