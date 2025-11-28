@@ -115,7 +115,17 @@ def patch_sync(func_async: AsyncCallable) -> Callable:
     """Patch sync function from async function."""
 
     def patched_sync(*args: Any, **kwargs: Any) -> Any:
-        loop = asyncio.get_event_loop()
-        return loop.run_until_complete(func_async(*args, **kwargs))
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            # No running event loop, safe to use get_event_loop (for pre-3.11, 3.10 behavior)
+            loop = asyncio.get_event_loop()
+            return loop.run_until_complete(func_async(*args, **kwargs))
+        else:
+            # If already in an event loop, create a new one in a new thread.
+            # But as per strict behavioral preservation, keep the same error as original
+            raise RuntimeError(
+                "patch_sync cannot be called from a running event loop"
+            )
 
     return patched_sync
