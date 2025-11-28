@@ -79,7 +79,7 @@ class ParallelAgentRunner(BaseAgentRunner):
         self,
         agent_worker: BaseAgentWorker,
         chat_history: Optional[List[ChatMessage]] = None,
-        state: Optional[DAGAgentState] = None,
+        state: Optional['DAGAgentState'] = None,
         memory: Optional[BaseMemory] = None,
         llm: Optional[LLM] = None,
         callback_manager: Optional[CallbackManager] = None,
@@ -87,10 +87,10 @@ class ParallelAgentRunner(BaseAgentRunner):
         delete_task_on_finish: bool = False,
     ) -> None:
         """Initialize."""
-        self.memory = memory or ChatMemoryBuffer.from_defaults(chat_history, llm=llm)
-        self.state = state or DAGAgentState()
-        self.callback_manager = callback_manager or CallbackManager([])
-        self.init_task_state_kwargs = init_task_state_kwargs or {}
+        self.memory = memory if memory is not None else ChatMemoryBuffer.from_defaults(chat_history, llm=llm)
+        self.state = state if state is not None else DAGAgentState()
+        self.callback_manager = callback_manager if callback_manager is not None else CallbackManager([])
+        self.init_task_state_kwargs = init_task_state_kwargs if init_task_state_kwargs is not None else {}
         self.agent_worker = agent_worker
         self.delete_task_on_finish = delete_task_on_finish
 
@@ -138,8 +138,8 @@ class ParallelAgentRunner(BaseAgentRunner):
 
     def list_tasks(self, **kwargs: Any) -> List[Task]:
         """List tasks."""
-        task_states = list(self.state.task_dict.values())
-        return [task_state.task for task_state in task_states]
+        # Avoid unnecessary intermediate list allocation
+        return [task_state.task for task_state in self.state.task_dict.values()]
 
     def get_task(self, task_id: str, **kwargs: Any) -> Task:
         """Get task."""
