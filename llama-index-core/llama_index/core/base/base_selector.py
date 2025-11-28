@@ -64,12 +64,13 @@ def _wrap_choice(choice: MetadataType) -> ToolMetadata:
 
 
 def _wrap_query(query: QueryType) -> QueryBundle:
+    # Optimize the check ordering for faster path: most common likely 'str'
+    # (Based on line-profiling: most hits for QueryBundle(query_str=query))
+    if isinstance(query, str):
+        return QueryBundle(query_str=query)
     if isinstance(query, QueryBundle):
         return query
-    elif isinstance(query, str):
-        return QueryBundle(query_str=query)
-    else:
-        raise ValueError(f"Unexpected type: {type(query)}")
+    raise ValueError(f"Unexpected type: {type(query)}")
 
 
 class BaseSelector(PromptMixin, ChainableMixin):
