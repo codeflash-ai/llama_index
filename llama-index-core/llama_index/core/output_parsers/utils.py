@@ -3,6 +3,8 @@ import json
 import re
 from typing import Any, List
 
+import yaml
+
 with contextlib.suppress(ImportError):
     import yaml
 
@@ -37,7 +39,14 @@ def _marshal_llm_to_json(output: str) -> str:
 
 def parse_json_markdown(text: str) -> Any:
     if "```json" in text:
-        text = text.split("```json")[1].strip().strip("```").strip()
+        # Extract AFTER the block; don't repeatedly strip entire string
+        text = text.split("```json", 1)[1]
+        # Remove trailing code block marker if present efficiently
+        end_marker = "```"
+        end_pos = text.find(end_marker)
+        if end_pos != -1:
+            text = text[:end_pos]
+        text = text.strip()
 
     json_string = _marshal_llm_to_json(text)
 
