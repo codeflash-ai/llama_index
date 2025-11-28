@@ -61,11 +61,24 @@ class FixedRecencyPostprocessor(BaseNodePostprocessor):
         if query_bundle is None:
             raise ValueError("Missing query bundle in extra info.")
 
-        # sort nodes by date
-        node_dates = pd.to_datetime(
-            [node.node.metadata[self.date_key] for node in nodes]
-        )
-        sorted_node_idxs = np.flip(node_dates.argsort())
+        # Extract date values directly; avoiding pandas overhead
+        date_values = [node.node.metadata[self.date_key] for node in nodes]
+
+        # Bulk parse dates using numpy for performance
+        # This approach assumes ISO8601 format or similar;
+        # fallback to pandas only if necessary
+        try:
+            # Use numpy.datetime64 for fast sorting
+            np_dates = np.array(date_values, dtype='datetime64[ms]')
+        except Exception:
+            # Fallback to pandas if parsing fails
+            import pandas as pd  # local import for rare fallback
+            np_dates = pd.to_datetime(date_values).values
+
+        # argsort by date in descending order
+        sorted_node_idxs = np_dates.argsort()[::-1]
+
+        # Efficient node selection using list comprehension
         sorted_nodes = [nodes[idx] for idx in sorted_node_idxs]
 
         return sorted_nodes[: self.top_k]
