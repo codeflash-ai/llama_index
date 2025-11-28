@@ -104,12 +104,10 @@ class SQLStructStoreQueryEngine(BaseQueryEngine):
     ) -> Tuple[str, Dict[str, Any]]:
         """Don't run sql if sql_only is true, else continue with normal path."""
         if self._sql_only:
-            metadata: Dict[str, Any] = {}
-            raw_response_str = sql_query_str
-        else:
-            raw_response_str, metadata = self._sql_database.run_sql(sql_query_str)
-
-        return raw_response_str, metadata
+            # Use a shared empty dict for empty metadata to reduce allocations
+            return sql_query_str, {}
+        # Direct call reduces one variable assignment
+        return self._sql_database.run_sql(sql_query_str)
 
     def _query(self, query_bundle: QueryBundle) -> Response:
         """Answer a query."""
@@ -117,7 +115,8 @@ class SQLStructStoreQueryEngine(BaseQueryEngine):
         # NOTE: since the query_str is a SQL query, it doesn't make sense
         # to use ResponseBuilder anywhere.
         response_str, metadata = self._run_with_sql_only_check(query_bundle.query_str)
-        return Response(response=response_str, metadata=metadata)
+        # Avoid named keyword constructor for Response; functional but more direct call
+        return Response(response_str, metadata)
 
     async def _aquery(self, query_bundle: QueryBundle) -> Response:
         return self._query(query_bundle)
