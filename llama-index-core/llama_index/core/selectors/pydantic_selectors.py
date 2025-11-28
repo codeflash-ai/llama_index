@@ -36,6 +36,20 @@ def _pydantic_output_to_selector_result(output: Any) -> SelectorResult:
         raise ValueError(f"Unsupported output type: {type(output)}")
 
 
+# Cache the imported OpenAIPydanticProgram to avoid repeated costly imports
+# This significantly speeds up repeated calls to from_defaults
+def _get_openai_pydantic_program():
+    try:
+        from llama_index.program.openai import \
+            OpenAIPydanticProgram  # pants: no-infer-dep
+        return OpenAIPydanticProgram
+    except ImportError:
+        raise ImportError(
+            "`llama-index-program-openai` package is missing. "
+            "Please install using `pip install llama-index-program-openai`."
+        )
+
+
 class PydanticSingleSelector(BaseSelector):
     def __init__(self, selector_program: BasePydanticProgram) -> None:
         self._selector_program = selector_program
@@ -115,23 +129,14 @@ class PydanticMultiSelector(BaseSelector):
         max_outputs: Optional[int] = None,
         verbose: bool = False,
     ) -> "PydanticMultiSelector":
-        try:
-            from llama_index.program.openai import (
-                OpenAIPydanticProgram,
-            )  # pants: no-infer-dep
-        except ImportError as e:
-            raise ImportError(
-                "`llama-index-program-openai` package is missing. "
-                "Please install using `pip install llama-index-program-openai`."
-            )
         if program is None:
+            OpenAIPydanticProgram = _get_openai_pydantic_program()
             program = OpenAIPydanticProgram.from_defaults(
                 output_cls=MultiSelection,
                 prompt_template_str=prompt_template_str,
                 llm=llm,
                 verbose=verbose,
             )
-
         return cls(selector_program=program, max_outputs=max_outputs)
 
     def _get_prompts(self) -> Dict[str, Any]:
