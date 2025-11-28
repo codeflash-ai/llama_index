@@ -730,10 +730,15 @@ class Document(TextNode):
     @classmethod
     def from_semantic_kernel_format(cls, doc: "MemoryRecord") -> "Document":
         """Convert struct from Semantic Kernel document format."""
+        embedding = None
+        emb = doc._embedding
+        if emb is not None:
+            # Avoid redundant attribute accesses by storing in local variable.
+            embedding = emb.tolist()
         return cls(
             text=doc._text,
             metadata={"additional_metadata": doc._additional_metadata},
-            embedding=doc._embedding.tolist() if doc._embedding is not None else None,
+            embedding=embedding,
             id_=doc._id,
         )
 
