@@ -146,7 +146,14 @@ class PydanticMultiSelector(BaseSelector):
         self, choices: Sequence[ToolMetadata], query: QueryBundle
     ) -> SelectorResult:
         # prepare input
-        context_list = _build_choices_text(choices)
+        texts = []
+        for ind, choice in enumerate(choices):
+            desc = choice.description
+            if "\n" in desc:
+                desc = " ".join(desc.splitlines())
+            text = f"({ind + 1}) {desc}"
+            texts.append(text)
+        context_list = "\n\n".join(texts)
         max_outputs = self._max_outputs or len(choices)
 
         # predict
