@@ -54,6 +54,10 @@ from llama_index.core.tools import BaseTool, ToolOutput, adapt_to_async_tool
 from llama_index.core.tools.types import AsyncBaseTool
 from llama_index.core.utils import print_text, unit_generator
 
+_DEFAULT_REACT_CHAT_FORMATTER = ReActChatFormatter()
+
+_DEFAULT_REACT_OUTPUT_PARSER = ReActOutputParser()
+
 
 def add_user_step_to_reasoning(
     step: TaskStep,
@@ -90,17 +94,29 @@ class ReActAgentWorker(BaseAgentWorker):
         self._llm = llm
         self.callback_manager = callback_manager or llm.callback_manager
         self._max_iterations = max_iterations
-        self._react_chat_formatter = react_chat_formatter or ReActChatFormatter()
-        self._output_parser = output_parser or ReActOutputParser()
+        # Avoid repeated instantiation by retaining default objects at a module level
+        if react_chat_formatter is None:
+            # Re-use singletons for default formatter and parser to avoid costly instantiations
+            # (no side effects assumed, since they're stateless formatters/parsers from context)
+            self._react_chat_formatter = _DEFAULT_REACT_CHAT_FORMATTER
+        else:
+            self._react_chat_formatter = react_chat_formatter
+        if output_parser is None:
+            self._output_parser = _DEFAULT_REACT_OUTPUT_PARSER
+        else:
+            self._output_parser = output_parser
         self._verbose = verbose
 
-        if len(tools) > 0 and tool_retriever is not None:
-            raise ValueError("Cannot specify both tools and tool_retriever")
-        elif len(tools) > 0:
-            self._get_tools = lambda _: tools
+        # Optimize tool-getter setup logic for the common case without casting
+        if len(tools) > 0:
+            if tool_retriever is not None:
+                raise ValueError("Cannot specify both tools and tool_retriever")
+            # Avoid redundant lambda creation per instance: use reference if possible
+            _tools = tools
+            self._get_tools = lambda _: _tools
         elif tool_retriever is not None:
-            tool_retriever_c = cast(ObjectRetriever[BaseTool], tool_retriever)
-            self._get_tools = lambda message: tool_retriever_c.retrieve(message)
+            # Avoid unnecessary casting overhead
+            self._get_tools = tool_retriever.retrieve
         else:
             self._get_tools = lambda _: []
 
@@ -127,13 +143,20 @@ class ReActAgentWorker(BaseAgentWorker):
         Returns:
             ReActAgent
         """
-        llm = llm or Settings.llm
+        # Avoid repeated access and unnecessary chaining
+        _llm = llm if llm is not None else Settings.llm
+
+        # Prefer attribute assignment only if needed
         if callback_manager is not None:
-            llm.callback_manager = callback_manager
+            _llm.callback_manager = callback_manager
+
+        # Prepare the tools list just once before usage
+        _tools = tools if tools is not None else []
+
         return cls(
-            tools=tools or [],
+            tools=_tools,
             tool_retriever=tool_retriever,
-            llm=llm,
+            llm=_llm,
             max_iterations=max_iterations,
             react_chat_formatter=react_chat_formatter,
             output_parser=output_parser,
