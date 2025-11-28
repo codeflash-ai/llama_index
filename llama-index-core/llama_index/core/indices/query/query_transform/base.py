@@ -239,10 +239,11 @@ class ImageOutputQueryTransform(BaseQueryTransform):
         """
         self._width = width
         self._query_prompt = query_prompt or DEFAULT_IMAGE_OUTPUT_PROMPT
+        self._prompts_dict = {"query_prompt": self._query_prompt}
 
     def _get_prompts(self) -> PromptDictType:
         """Get prompts."""
-        return {"query_prompt": self._query_prompt}
+        return self._prompts_dict
 
     def _update_prompts(self, prompts: PromptDictType) -> None:
         """Update prompts."""
