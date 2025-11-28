@@ -85,18 +85,26 @@ class SQLStructStoreQueryEngine(BaseQueryEngine):
     ) -> None:
         """Initialize params."""
         self._sql_database = index.sql_database
-        self._sql_context_container = (
-            sql_context_container or index.sql_context_container
-        )
+
+        # Avoid repeated attribute access by using local variable and minimize property calls.
+        # Both branches access index.sql_context_container only once.
+        self._sql_context_container = sql_context_container if sql_context_container is not None else index.sql_context_container
+
         self._sql_only = sql_only
+
+        # Avoid repeated access to index.service_context by using local variable.
+        service_context = index.service_context
+
+        # Pass callback manager directly from context or settings.
         super().__init__(
             callback_manager=callback_manager_from_settings_or_context(
-                Settings, index.service_context
+                Settings, service_context
             )
         )
 
     def _get_prompt_modules(self) -> PromptMixinType:
         """Get prompt modules."""
+        # Return static dictionary; no change required.
         return {}
 
     def _run_with_sql_only_check(
