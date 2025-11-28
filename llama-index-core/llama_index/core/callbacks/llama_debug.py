@@ -42,10 +42,11 @@ class LlamaDebugHandler(BaseCallbackHandler):
         self._cur_trace_id: Optional[str] = None
         self._trace_map: Dict[str, List[str]] = defaultdict(list)
         self.print_trace_on_end = print_trace_on_end
-        event_starts_to_ignore = (
-            event_starts_to_ignore if event_starts_to_ignore else []
-        )
-        event_ends_to_ignore = event_ends_to_ignore if event_ends_to_ignore else []
+
+        # Use tuple construction only once for starts/ends to ignore, as per BaseCallbackHandler __init__
+        event_starts_to_ignore = event_starts_to_ignore or []
+        event_ends_to_ignore = event_ends_to_ignore or []
+
         super().__init__(
             event_starts_to_ignore=event_starts_to_ignore,
             event_ends_to_ignore=event_ends_to_ignore,
@@ -104,14 +105,35 @@ class LlamaDebugHandler(BaseCallbackHandler):
 
     def _get_event_pairs(self, events: List[CBEvent]) -> List[List[CBEvent]]:
         """Helper function to pair events according to their ID."""
-        event_pairs: Dict[str, List[CBEvent]] = defaultdict(list)
-        for event in events:
-            event_pairs[event.id_].append(event)
 
-        return sorted(
+        # Fast-path: if events are empty, avoid any further work
+        if not events:
+            return []
+
+        # Group by id_ directly and gather reference time for each group for fast sorting
+        event_pairs: Dict[str, List[CBEvent]] = defaultdict(list)
+        ref_times = {}
+
+        for event in events:
+            l = event_pairs[event.id_]
+            l.append(event)
+            # Only parse the first time per id_ for final sorting
+            if len(l) == 1:
+                ref_times[event.id_] = event.time
+
+        # Prepare items for sorting in a single pass for efficiency
+        # Pair: ([CBEvent, ...], <parsed time>) so sorting is O(n log n) but O(n) parses
+        ref_times_dt = {}
+        for id_, t_str in ref_times.items():
+            ref_times_dt[id_] = datetime.strptime(t_str, TIMESTAMP_FORMAT)
+
+        # Get list of pairs with stable order by timestamp
+        sorted_pairs = sorted(
             event_pairs.values(),
-            key=lambda x: datetime.strptime(x[0].time, TIMESTAMP_FORMAT),
+            key=lambda x: ref_times_dt[x[0].id_],  # Avoid repeated strptime
         )
+
+        return sorted_pairs
 
     def _get_time_stats_from_event_pairs(
         self, event_pairs: List[List[CBEvent]]
