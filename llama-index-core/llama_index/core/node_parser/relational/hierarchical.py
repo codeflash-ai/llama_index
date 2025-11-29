@@ -51,11 +51,16 @@ def get_child_nodes(nodes: List[BaseNode], all_nodes: List[BaseNode]) -> List[Ba
             [r.node_id for r in node.relationships[NodeRelationship.CHILD]]
         )
 
-    child_nodes = []
-    for candidate_node in all_nodes:
-        if candidate_node.node_id not in children_ids:
-            continue
-        child_nodes.append(candidate_node)
+    if not children_ids:
+        return []
+
+    # Optimization: avoid O(N) lookups and repeated scans.
+    children_id_set = set(children_ids)
+
+    # Build {node_id: candidate_node} mapping for O(1) lookup.
+    # Since we must preserve output as the order of all_nodes, iterate all_nodes as in original.
+    child_nodes = [candidate_node for candidate_node in all_nodes 
+                   if candidate_node.node_id in children_id_set]
 
     return child_nodes
 
