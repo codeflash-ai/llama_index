@@ -1,14 +1,14 @@
-"""Document store."""
-
 from typing import Dict, List, Optional, Sequence, Tuple
 
+from codeflash.code_utils.codeflash_wrap_decorator import codeflash_performance_async
+
 from llama_index.core.schema import BaseNode, TextNode
-from llama_index.core.storage.docstore.types import (
-    BaseDocumentStore,
-    RefDocInfo,
-)
+from llama_index.core.storage.docstore.types import BaseDocumentStore, RefDocInfo
 from llama_index.core.storage.docstore.utils import doc_to_json, json_to_doc
 from llama_index.core.storage.kvstore.types import DEFAULT_BATCH_SIZE, BaseKVStore
+
+"""Document store."""
+
 
 DEFAULT_NAMESPACE = "docstore"
 
@@ -345,9 +345,14 @@ class KVDocumentStore(BaseDocumentStore):
         """Check if a ref_doc_id has been ingested."""
         return self.get_ref_doc_info(ref_doc_id) is not None
 
+    @codeflash_performance_async
     async def aref_doc_exists(self, ref_doc_id: str) -> bool:
         """Check if a ref_doc_id has been ingested."""
-        return await self.aget_ref_doc_info(ref_doc_id) is not None
+        # Optimize: run aget and shortcut without extra await
+        ref_doc_info = await self._kvstore.aget(
+            ref_doc_id, collection=self._ref_doc_collection
+        )
+        return ref_doc_info is not None
 
     def document_exists(self, doc_id: str) -> bool:
         """Check if document exists."""
@@ -536,10 +541,12 @@ class KVDocumentStore(BaseDocumentStore):
     def get_all_document_hashes(self) -> Dict[str, str]:
         """Get the stored hash for all documents."""
         hashes = {}
-        for doc_id in self._kvstore.get_all(collection=self._metadata_collection):
-            hash = self.get_document_hash(doc_id)
-            if hash is not None:
-                hashes[hash] = doc_id
+        metadata_dict = self._kvstore.get_all(collection=self._metadata_collection)
+        for doc_id, metadata in metadata_dict.items():
+            if metadata is not None:
+                hash = metadata.get("doc_hash", None)
+                if hash is not None:
+                    hashes[hash] = doc_id
         return hashes
 
     async def aget_all_document_hashes(self) -> Dict[str, str]:
