@@ -64,6 +64,13 @@ class RecursiveRetriever(BaseRetriever):
         self._query_response_tmpl = query_response_tmpl or DEFAULT_QUERY_RESPONSE_TMPL
         super().__init__(callback_manager, verbose=verbose)
 
+        # Build combined lookup dictionary for efficient object retrieval
+        self._object_lookup = {
+            **self._node_dict,
+            **self._retriever_dict,
+            **self._query_engine_dict,
+        }
+
     def _deduplicate_nodes(
         self, nodes_with_score: List[NodeWithScore]
     ) -> List[NodeWithScore]:
@@ -138,15 +145,9 @@ class RecursiveRetriever(BaseRetriever):
 
     def _get_object(self, query_id: str) -> RQN_TYPE:
         """Fetch retriever or query engine."""
-        node = self._node_dict.get(query_id, None)
-        if node is not None:
-            return node
-        retriever = self._retriever_dict.get(query_id, None)
-        if retriever is not None:
-            return retriever
-        query_engine = self._query_engine_dict.get(query_id, None)
-        if query_engine is not None:
-            return query_engine
+        obj = self._object_lookup.get(query_id, None)
+        if obj is not None:
+            return obj
         raise ValueError(
             f"Query id {query_id} not found in either `retriever_dict` "
             "or `query_engine_dict`."
@@ -167,7 +168,13 @@ class RecursiveRetriever(BaseRetriever):
         query_id = query_id or self._root_id
         cur_similarity = cur_similarity or 1.0
 
-        obj = self._get_object(query_id)
+        obj = self._object_lookup.get(query_id)
+        if obj is None:
+            raise ValueError(
+                f"Query id {query_id} not found in either `retriever_dict`, "
+                "`query_engine_dict`, or `node_dict`."
+            )
+
         if isinstance(obj, BaseNode):
             nodes_to_add = [NodeWithScore(node=obj, score=cur_similarity)]
             additional_nodes: List[NodeWithScore] = []
