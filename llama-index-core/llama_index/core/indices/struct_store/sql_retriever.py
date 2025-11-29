@@ -337,7 +337,6 @@ class NLSQLRetriever(BaseRetriever, PromptMixin):
         else:
             query_bundle = str_or_query_bundle
         table_desc_str = self._get_table_context(query_bundle)
-        logger.info(f"> Table desc str: {table_desc_str}")
 
         response_str = await self._llm.apredict(
             self._text_to_sql_prompt,
@@ -350,7 +349,6 @@ class NLSQLRetriever(BaseRetriever, PromptMixin):
             response_str, query_bundle
         )
         # assume that it's a valid SQL query
-        logger.debug(f"> Predicted SQL query: {sql_query_str}")
 
         if self._sql_only:
             sql_only_node = TextNode(text=f"{sql_query_str}")
@@ -399,9 +397,7 @@ class NLSQLRetriever(BaseRetriever, PromptMixin):
             )
 
             if table_schema_obj.context_str:
-                table_opt_context = " The table description is: "
-                table_opt_context += table_schema_obj.context_str
-                table_info += table_opt_context
+                table_info += " The table description is: " + table_schema_obj.context_str
 
             context_strs.append(table_info)
 
