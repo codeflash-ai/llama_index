@@ -16,6 +16,10 @@ from llama_index.core.query_engine.retriever_query_engine import (
 from llama_index.core.schema import NodeWithScore, QueryBundle, TextNode
 from llama_index.core.utils import get_cache_dir
 
+_ARTICLES_RE = re.compile(r"\b(a|an|the)\b")
+
+_PUNCT_TRANS = str.maketrans('', '', string.punctuation)
+
 DEV_DISTRACTOR_URL = """http://curtis.ml.cmu.edu/datasets/\
 hotpot/hotpot_dev_distractor_v1.json"""
 
@@ -164,20 +168,12 @@ Utils from https://github.com/hotpotqa/hotpot/blob/master/hotpot_evaluate_v1.py
 
 
 def normalize_answer(s: str) -> str:
-    def remove_articles(text: str) -> str:
-        return re.sub(r"\b(a|an|the)\b", " ", text)
-
-    def white_space_fix(text: str) -> str:
-        return " ".join(text.split())
-
-    def remove_punc(text: str) -> str:
-        exclude = set(string.punctuation)
-        return "".join(ch for ch in text if ch not in exclude)
-
-    def lower(text: str) -> str:
-        return text.lower()
-
-    return white_space_fix(remove_articles(remove_punc(lower(s))))
+    # Inline previous helpers for performance
+    s = s.lower()
+    s = s.translate(_PUNCT_TRANS)
+    s = _ARTICLES_RE.sub(" ", s)
+    s = " ".join(s.split())
+    return s
 
 
 def f1_score(prediction: str, ground_truth: str) -> Tuple[float, float, float]:
@@ -199,12 +195,17 @@ def f1_score(prediction: str, ground_truth: str) -> Tuple[float, float, float]:
 
     prediction_tokens = normalized_prediction.split()
     ground_truth_tokens = normalized_ground_truth.split()
-    common = Counter(prediction_tokens) & Counter(ground_truth_tokens)
-    num_same = sum(common.values())
+    # Use a single pass to count matching tokens (memory+runtime win over Counter)
+    if not prediction_tokens or not ground_truth_tokens:
+        return ZERO_METRIC
+
+    pred_counts = Counter(prediction_tokens)
+    gt_counts = Counter(ground_truth_tokens)
+    num_same = sum((pred_counts & gt_counts).values())
     if num_same == 0:
         return ZERO_METRIC
-    precision = 1.0 * num_same / len(prediction_tokens)
-    recall = 1.0 * num_same / len(ground_truth_tokens)
+    precision = num_same / len(prediction_tokens)
+    recall = num_same / len(ground_truth_tokens)
     f1 = (2 * precision * recall) / (precision + recall)
     return f1, precision, recall
 
