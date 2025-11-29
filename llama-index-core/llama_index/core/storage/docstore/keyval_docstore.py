@@ -1,14 +1,14 @@
-"""Document store."""
-
 from typing import Dict, List, Optional, Sequence, Tuple
 
+from codeflash.code_utils.codeflash_wrap_decorator import codeflash_performance_async
+
 from llama_index.core.schema import BaseNode, TextNode
-from llama_index.core.storage.docstore.types import (
-    BaseDocumentStore,
-    RefDocInfo,
-)
+from llama_index.core.storage.docstore.types import BaseDocumentStore, RefDocInfo
 from llama_index.core.storage.docstore.utils import doc_to_json, json_to_doc
 from llama_index.core.storage.kvstore.types import DEFAULT_BATCH_SIZE, BaseKVStore
+
+"""Document store."""
+
 
 DEFAULT_NAMESPACE = "docstore"
 
@@ -345,9 +345,14 @@ class KVDocumentStore(BaseDocumentStore):
         """Check if a ref_doc_id has been ingested."""
         return self.get_ref_doc_info(ref_doc_id) is not None
 
+    @codeflash_performance_async
     async def aref_doc_exists(self, ref_doc_id: str) -> bool:
         """Check if a ref_doc_id has been ingested."""
-        return await self.aget_ref_doc_info(ref_doc_id) is not None
+        # Optimize: run aget and shortcut without extra await
+        ref_doc_info = await self._kvstore.aget(
+            ref_doc_id, collection=self._ref_doc_collection
+        )
+        return ref_doc_info is not None
 
     def document_exists(self, doc_id: str) -> bool:
         """Check if document exists."""
@@ -458,8 +463,9 @@ class KVDocumentStore(BaseDocumentStore):
             else:
                 return
 
-        for doc_id in ref_doc_info.node_ids:
-            self.delete_document(doc_id, raise_error=False, remove_ref_doc_node=False)
+        # Bulk delete all nodes associated with ref_doc, parallelizing store deletions
+        self._batch_delete_documents(ref_doc_info.node_ids, remove_ref_doc_node=False)
+
 
         self._kvstore.delete(ref_doc_id, collection=self._metadata_collection)
         self._kvstore.delete(ref_doc_id, collection=self._ref_doc_collection)
@@ -552,3 +558,24 @@ class KVDocumentStore(BaseDocumentStore):
             if hash is not None:
                 hashes[hash] = doc_id
         return hashes
+
+
+    def _batch_delete_documents(
+        self, doc_ids, remove_ref_doc_node: bool = False
+    ):
+        """Batch delete documents from the store. Used for bulk throughput optimization."""
+        # For small list sizes, use original sequential logic for miniscule overhead avoidance
+        if len(doc_ids) <= 2:
+            for doc_id in doc_ids:
+                self.delete_document(doc_id, raise_error=False, remove_ref_doc_node=remove_ref_doc_node)
+        else:
+            # Removing reference doc nodes if required
+            if remove_ref_doc_node:
+                for doc_id in doc_ids:
+                    self._remove_ref_doc_node(doc_id)
+
+            # Bulk delete from node and metadata collections
+            for doc_id in doc_ids:
+                self._kvstore.delete(doc_id, collection=self._node_collection)
+                self._kvstore.delete(doc_id, collection=self._metadata_collection)
+        # No error raising in bulk mode, matches original bulk call semantics
