@@ -95,7 +95,13 @@ class InputKeys(BaseModel):
 
     def all(self) -> Set[str]:
         """Get all input keys."""
-        return self.required_keys.union(self.optional_keys)
+        # Using set union with | operator is slightly faster for large sets than .union()
+        # Also, if either set is empty, return the other set directly to avoid creating a new set
+        if not self.required_keys:
+            return self.optional_keys
+        if not self.optional_keys:
+            return self.required_keys
+        return self.required_keys | self.optional_keys
 
 
 class OutputKeys(BaseModel):
