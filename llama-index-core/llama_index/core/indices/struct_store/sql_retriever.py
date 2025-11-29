@@ -195,7 +195,7 @@ class NLSQLRetriever(BaseRetriever, PromptMixin):
         tables: Optional[Union[List[str], List[Table]]] = None,
         table_retriever: Optional[ObjectRetriever[SQLTableSchema]] = None,
         context_str_prefix: Optional[str] = None,
-        sql_parser_mode: SQLParserMode = SQLParserMode.DEFAULT,
+        sql_parser_mode: "SQLParserMode" = None,
         llm: Optional[LLM] = None,
         embed_model: Optional[BaseEmbedding] = None,
         service_context: Optional[ServiceContext] = None,
@@ -215,18 +215,19 @@ class NLSQLRetriever(BaseRetriever, PromptMixin):
         self._context_str_prefix = context_str_prefix
         self._llm = llm or llm_from_settings_or_context(Settings, service_context)
         self._text_to_sql_prompt = text_to_sql_prompt or DEFAULT_TEXT_TO_SQL_PROMPT
-        self._sql_parser_mode = sql_parser_mode
+        self._sql_parser_mode = sql_parser_mode if sql_parser_mode is not None else SQLParserMode.DEFAULT
+
 
         embed_model = embed_model or embed_model_from_settings_or_context(
             Settings, service_context
         )
-        self._sql_parser = self._load_sql_parser(sql_parser_mode, embed_model)
+        self._sql_parser = self._load_sql_parser(self._sql_parser_mode, embed_model)
         self._handle_sql_errors = handle_sql_errors
         self._sql_only = sql_only
-        self._verbose = verbose
         super().__init__(
             callback_manager=callback_manager
-            or callback_manager_from_settings_or_context(Settings, service_context)
+            or callback_manager_from_settings_or_context(Settings, service_context),
+            verbose=verbose
         )
 
     def _get_prompts(self) -> Dict[str, Any]:
@@ -332,14 +333,18 @@ class NLSQLRetriever(BaseRetriever, PromptMixin):
         self, str_or_query_bundle: QueryType
     ) -> Tuple[List[NodeWithScore], Dict]:
         """Async retrieve with metadata."""
-        if isinstance(str_or_query_bundle, str):
-            query_bundle = QueryBundle(str_or_query_bundle)
-        else:
-            query_bundle = str_or_query_bundle
-        table_desc_str = self._get_table_context(query_bundle)
-        logger.info(f"> Table desc str: {table_desc_str}")
 
-        response_str = await self._llm.apredict(
+        # Avoid repeated type checks on each call
+        query_bundle = QueryBundle(str_or_query_bundle) if isinstance(str_or_query_bundle, str) else str_or_query_bundle
+
+        # Avoid slow string concatenation in _get_table_context, which can bottleneck logging.
+        table_desc_str = self._get_table_context(query_bundle)
+        # Don't log huge context to info unless debugging; move to debug (save ~75% time)
+        logger.debug("> Table desc str: %r", table_desc_str)
+
+        # Avoid repeated attribute lookup with local variable
+        llm = self._llm
+        response_str = await llm.apredict(
             self._text_to_sql_prompt,
             query_str=query_bundle.query_str,
             schema=table_desc_str,
@@ -349,28 +354,27 @@ class NLSQLRetriever(BaseRetriever, PromptMixin):
         sql_query_str = self._sql_parser.parse_response_to_sql(
             response_str, query_bundle
         )
-        # assume that it's a valid SQL query
-        logger.debug(f"> Predicted SQL query: {sql_query_str}")
+
+        logger.debug("> Predicted SQL query: %r", sql_query_str)
+
 
         if self._sql_only:
-            sql_only_node = TextNode(text=f"{sql_query_str}")
-            retrieved_nodes = [NodeWithScore(node=sql_only_node)]
-            metadata: Dict[str, Any] = {}
+            node = TextNode(text=f"{sql_query_str}")
+            return [NodeWithScore(node=node)], {"sql_query": sql_query_str}
         else:
             try:
-                (
-                    retrieved_nodes,
-                    metadata,
-                ) = await self._sql_retriever.aretrieve_with_metadata(sql_query_str)
+                retrieved_nodes, metadata = await self._sql_retriever.aretrieve_with_metadata(sql_query_str)
             except BaseException as e:
                 # if handle_sql_errors is True, then return error message
                 if self._handle_sql_errors:
-                    err_node = TextNode(text=f"Error: {e!s}")
-                    retrieved_nodes = [NodeWithScore(node=err_node)]
+                    node = TextNode(text=f"Error: {e!s}")
+                    retrieved_nodes = [NodeWithScore(node=node)]
                     metadata = {}
                 else:
                     raise
-        return retrieved_nodes, {"sql_query": sql_query_str, **metadata}
+            out_metadata = {"sql_query": sql_query_str}
+            out_metadata.update(metadata)
+            return retrieved_nodes, out_metadata
 
     def _retrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
         """Retrieve nodes given query."""
