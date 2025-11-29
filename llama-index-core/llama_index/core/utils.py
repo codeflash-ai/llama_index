@@ -12,21 +12,9 @@ from dataclasses import dataclass
 from functools import partial, wraps
 from itertools import islice
 from pathlib import Path
-from typing import (
-    Any,
-    AsyncGenerator,
-    Callable,
-    Dict,
-    Generator,
-    Iterable,
-    List,
-    Optional,
-    Protocol,
-    Set,
-    Type,
-    Union,
-    runtime_checkable,
-)
+from typing import (Any, AsyncGenerator, Callable, Dict, Generator, Iterable,
+                    List, Optional, Protocol, Set, Type, Union,
+                    runtime_checkable)
 
 
 class GlobalsHelper:
@@ -108,7 +96,8 @@ def set_global_tokenizer(tokenizer: Union[Tokenizer, Callable[[str], list]]) -> 
 def get_tokenizer() -> Callable[[str], List]:
     import llama_index.core
 
-    if llama_index.core.global_tokenizer is None:
+    tokenizer = llama_index.core.global_tokenizer
+    if tokenizer is None:
         tiktoken_import_err = (
             "`tiktoken` package not found, please run `pip install tiktoken`"
         )
@@ -117,24 +106,18 @@ def get_tokenizer() -> Callable[[str], List]:
         except ImportError:
             raise ImportError(tiktoken_import_err)
 
-        # set tokenizer cache temporarily
-        should_revert = False
-        if "TIKTOKEN_CACHE_DIR" not in os.environ:
-            should_revert = True
-            os.environ["TIKTOKEN_CACHE_DIR"] = os.path.join(
-                os.path.dirname(os.path.abspath(__file__)),
-                "_static/tiktoken_cache",
-            )
+        should_revert = _setup_tiktoken_cache()
 
         enc = tiktoken.encoding_for_model("gpt-3.5-turbo")
-        tokenizer = partial(enc.encode, allowed_special="all")
-        set_global_tokenizer(tokenizer)
+        tokenizer_new = partial(enc.encode, allowed_special="all")
+        set_global_tokenizer(tokenizer_new)
+        tokenizer = llama_index.core.global_tokenizer
 
         if should_revert:
             del os.environ["TIKTOKEN_CACHE_DIR"]
 
-    assert llama_index.core.global_tokenizer is not None
-    return llama_index.core.global_tokenizer
+    assert tokenizer is not None
+    return tokenizer
 
 
 def get_new_id(d: Set) -> str:
@@ -497,3 +480,15 @@ async def async_unit_generator(x: Any) -> AsyncGenerator[Any, None]:
         Any: the single element
     """
     yield x
+
+
+def _setup_tiktoken_cache():
+    # Set the tiktoken cache directory if not already set
+    cache_env = "TIKTOKEN_CACHE_DIR"
+    should_revert = cache_env not in os.environ
+    if should_revert:
+        os.environ[cache_env] = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            "_static/tiktoken_cache",
+        )
+    return should_revert
