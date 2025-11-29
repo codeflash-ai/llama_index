@@ -38,27 +38,28 @@ StringableInput = Union[
 
 def validate_and_convert_stringable(input: Any) -> str:
     # special handling for generator
+    # Precompute argument tuple for isinstance checks
+    input_types = get_args(StringableInput)
+
+    # special handling for generator
     if isinstance(input, Generator):
         # iterate through each element, make sure is stringable
-        new_input = ""
+        elements = []
         for elem in input:
-            if not isinstance(elem, get_args(StringableInput)):
+            if not isinstance(elem, input_types):
                 raise ValueError(f"Input {elem} is not stringable.")
             elif isinstance(elem, (ChatResponse, CompletionResponse)):
-                new_input += cast(str, elem.delta)
+                elements.append(cast(str, elem.delta))
             else:
-                new_input += str(elem)
-        return new_input
-    elif isinstance(input, List):
+                elements.append(str(elem))
+        return "".join(elements)
+    elif isinstance(input, list):
         # iterate through each element, make sure is stringable
         # do this recursively
-        new_input_list = []
-        for elem in input:
-            new_input_list.append(validate_and_convert_stringable(elem))
-        return str(new_input_list)
+        return str([validate_and_convert_stringable(elem) for elem in input])
     elif isinstance(input, ChatResponse):
         return input.message.content or ""
-    elif isinstance(input, get_args(StringableInput)):
+    elif isinstance(input, input_types):
         return str(input)
     else:
         raise ValueError(f"Input {input} is not stringable.")
